@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78bbbf590a43147c5bc0c0f4e7243700, type: 3}
+  m_Name: SettingData
+  m_EditorClassIdentifier: Assembly-CSharp::GoogleSpreadSheetLoader.SettingData
+  serviceAccountJsonPath: C:/Users/aq001/Downloads/ai-autorpg-304e705b3c26.json
+  listSpreadSheetInfo:
+  - spreadSheetName: Name Here
+    spreadSheetId: 1Dg-7PNCDaiE3Axtc4mRMEmk90OhTE7tD-s2XXcxAhNM
+  sheetTarget: 1
+  sheetTargetStr: '#'
+  sheet_enumTypeStr: Enum
+  sheet_localizationTypeStr: Localization
