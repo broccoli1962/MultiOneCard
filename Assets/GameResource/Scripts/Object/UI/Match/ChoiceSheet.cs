@@ -16,12 +16,6 @@ namespace Backend.Object.UI
             SuitCode.Spade, SuitCode.Heart, SuitCode.Diamond, SuitCode.Club, SuitCode.Star, SuitCode.Moon,
         };
 
-        private static readonly string[] SuitLabels = { "♠", "♥", "♦", "♣", "★", "☾" };
-
-        private static readonly Color SuitBlack = new Color(0.18f, 0.18f, 0.2f, 1f);
-        private static readonly Color SuitRed = new Color(0.72f, 0.18f, 0.2f, 1f);
-        private static readonly Color SuitBlue = new Color(0.16f, 0.32f, 0.72f, 1f);
-
         [SerializeField] private Font _font;
         [SerializeField] private Text _title;
         [SerializeField] private GameObject _suitGrid;
@@ -32,8 +26,8 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _queenGiveButton;
         [SerializeField] private CommonButton _kingExtraButton;
         [SerializeField] private CommonButton _kingHideButton;
+        [SerializeField] private CommonButton[] _suitButtons = new CommonButton[6];
 
-        private readonly CommonButton[] _suitButtons = new CommonButton[6];
         private bool _layoutReady;
 
         /// <summary>7 이후 문양. 값은 SuitCode.</summary>
@@ -49,7 +43,7 @@ namespace Backend.Object.UI
         public event Action ConfirmClicked;
 
         /// <summary>
-        /// 프리팹 미배선이어도 시트를 채운다.
+        /// 프리팹 자식에 묶인 시트를 찾아 이벤트를 묶는다.
         /// </summary>
         public void EnsureLayout(Font font = null)
         {
@@ -63,35 +57,21 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var rt = CachedRectTransform;
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(0f, 430f);
-            rt.sizeDelta = new Vector2(720f, 200f);
+            _title ??= FindOrCreateText("Title");
+            _suitGrid ??= FindOrCreate("SuitGrid");
+            BindSuitButtons();
+            _queenRow ??= FindOrCreate("QueenRow");
+            _kingRow ??= FindOrCreate("KingRow");
+            _queenReverseButton ??= FindOrCreateChildButton(_queenRow, "QueenRowReverse");
+            _queenGiveButton ??= FindOrCreateChildButton(_queenRow, "QueenRowGive");
+            _kingExtraButton ??= FindOrCreateChildButton(_kingRow, "KingRowExtra");
+            _kingHideButton ??= FindOrCreateChildButton(_kingRow, "KingRowHide");
+            _confirmButton ??= FindOrCreateButton("Confirm");
 
-            if (!TryGetComponent(out Image bg))
-            {
-                bg = CachedGameObject.AddComponent<Image>();
-            }
-
-            bg.color = new Color(0.08f, 0.1f, 0.14f, 0.92f);
-            bg.raycastTarget = true;
-
-            _title = FindOrCreateText("Title", new Vector2(0.5f, 1f), new Vector2(0f, -28f), new Vector2(680f, 40f), 30f);
-            _suitGrid = FindOrCreateSuitGrid();
-            _queenRow = FindOrCreateChoiceRow("QueenRow",
-                ("Reverse", "뒤집기"), ("Give", "주기"),
-                out _queenReverseButton, out _queenGiveButton);
-            _kingRow = FindOrCreateChoiceRow("KingRow",
-                ("Extra", "한장더"), ("Hide", "숨기기"),
-                out _kingExtraButton, out _kingHideButton);
-            _confirmButton = FindOrCreateButton("Confirm", "확정", new Vector2(0f, -64f), new Vector2(220f, 72f));
-
-            for (var i = 0; i < _suitButtons.Length; i++)
+            for (var i = 0; i < SuitCodes.Length; i++)
             {
                 var suit = SuitCodes[i];
-                BindButton(_suitButtons[i], () => SuitClicked?.Invoke(suit));
+                BindButton(SuitButton(i), () => SuitClicked?.Invoke(suit));
             }
 
             BindButton(_queenReverseButton, () => QueenModeClicked?.Invoke(QueenModeName.Reverse));
@@ -123,7 +103,10 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _title.text = TitleFor(prompt);
+            if (_title != null)
+            {
+                _title.text = TitleFor(prompt);
+            }
             SetActive(_suitGrid, prompt == MatchPrompt.Suit);
             SetActive(_queenRow, prompt == MatchPrompt.QueenMode);
             SetActive(_kingRow, prompt == MatchPrompt.KingMode);
@@ -141,225 +124,70 @@ namespace Backend.Object.UI
             Show();
         }
 
-        private GameObject FindOrCreateSuitGrid()
+        private void BindSuitButtons()
         {
-            var existing = CachedTransform.Find("SuitGrid");
-            GameObject go;
-            if (existing != null)
+            if (_suitButtons == null || _suitButtons.Length != SuitCodes.Length)
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("SuitGrid", typeof(RectTransform), typeof(GridLayoutGroup));
-                go.transform.SetParent(CachedTransform, false);
+                _suitButtons = new CommonButton[SuitCodes.Length];
             }
 
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(0f, -12f);
-            rt.sizeDelta = new Vector2(400f, 160f);
-
-            if (!go.TryGetComponent(out GridLayoutGroup grid))
+            if (_suitGrid == null)
             {
-                grid = go.AddComponent<GridLayoutGroup>();
+                return;
             }
-
-            grid.cellSize = new Vector2(120f, 72f);
-            grid.spacing = new Vector2(8f, 8f);
-            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = 3;
-            grid.childAlignment = TextAnchor.MiddleCenter;
-            grid.startAxis = GridLayoutGroup.Axis.Horizontal;
 
             for (var i = 0; i < SuitCodes.Length; i++)
             {
-                _suitButtons[i] = FindOrCreateChildButton(go.transform, "Suit_" + SuitCodes[i], SuitLabels[i], SuitTint(i));
+                _suitButtons[i] ??= FindOrCreateChildButton(_suitGrid, "Suit_" + SuitCodes[i]);
             }
-
-            return go;
         }
 
-        private GameObject FindOrCreateChoiceRow(
-            string name,
-            (string id, string label) left,
-            (string id, string label) right,
-            out CommonButton leftButton,
-            out CommonButton rightButton)
+        private CommonButton SuitButton(int index)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(0f, -12f);
-            rt.sizeDelta = new Vector2(520f, 80f);
-            if (!go.TryGetComponent(out HorizontalLayoutGroup layout))
-            {
-                layout = go.AddComponent<HorizontalLayoutGroup>();
-            }
-
-            layout.spacing = 16f;
-            layout.childAlignment = TextAnchor.MiddleCenter;
-            leftButton = FindOrCreateChildButton(go.transform, name + left.id, left.label, new Color(0.2f, 0.2f, 0.22f, 0.95f));
-            rightButton = FindOrCreateChildButton(go.transform, name + right.id, right.label, new Color(0.2f, 0.2f, 0.22f, 0.95f));
-            return go;
+            return _suitButtons != null && index >= 0 && index < _suitButtons.Length
+                ? _suitButtons[index]
+                : null;
         }
 
-        private CommonButton FindOrCreateButton(string name, string label, Vector2 pos, Vector2 size)
+        private CommonButton FindOrCreateButton(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CommonButton button))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 28f);
             return button;
         }
 
-        private CommonButton FindOrCreateChildButton(Transform parent, string name, string label, Color tint)
+        private CommonButton FindOrCreateChildButton(GameObject parent, string name)
         {
-            var existing = parent.Find(name);
-            GameObject go;
-            if (existing != null)
+            if (parent == null)
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(parent, false);
+                return null;
             }
 
-            go.GetComponent<RectTransform>().sizeDelta = new Vector2(220f, 72f);
-            if (go.TryGetComponent(out Image image))
+            var existing = parent.transform.Find(name);
+            if (existing == null || !existing.TryGetComponent(out CommonButton button))
             {
-                image.color = tint;
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 28f);
-            var text = go.GetComponentInChildren<Text>();
-            if (text != null && name.StartsWith("Suit_", StringComparison.Ordinal))
-            {
-                text.color = LabelColor(name[name.Length - 1]);
-            }
-
             return button;
         }
 
-        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        private Text FindOrCreateText(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            if (_font != null)
-            {
-                text.font = _font;
-            }
-
-            return text;
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out Text text) ? text : null;
         }
 
-        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
+        private GameObject FindOrCreate(string name)
         {
-            var existing = parent.Find("Label");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.text = label;
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            if (_font != null)
-            {
-                text.font = _font;
-            }
+            var existing = CachedTransform.Find(name);
+            return existing != null ? existing.gameObject : null;
         }
 
         private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
@@ -405,34 +233,5 @@ namespace Backend.Object.UI
             }
         }
 
-        private static Color SuitTint(int index)
-        {
-            switch (index)
-            {
-                case 1:
-                case 2:
-                    return new Color(0.42f, 0.16f, 0.18f, 0.95f);
-                case 4:
-                case 5:
-                    return new Color(0.16f, 0.22f, 0.42f, 0.95f);
-                default:
-                    return new Color(0.2f, 0.2f, 0.22f, 0.95f);
-            }
-        }
-
-        private static Color LabelColor(char suit)
-        {
-            switch (suit)
-            {
-                case 'H':
-                case 'D':
-                    return SuitRed;
-                case 'R':
-                case 'M':
-                    return SuitBlue;
-                default:
-                    return SuitBlack;
-            }
-        }
     }
 }

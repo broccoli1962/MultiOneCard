@@ -41,7 +41,7 @@ namespace Backend.Object.UI
         public event Action<CardView> Clicked;
 
         /// <summary>
-        /// 인스펙터 미배선 시 플레이스홀더 자식과 버튼을 만든다.
+        /// 프리팹에 묶인 Fill·Label·Button을 찾는다. Label 자식은 만들지 않는다.
         /// </summary>
         public void EnsureParts(Font font)
         {
@@ -55,38 +55,24 @@ namespace Backend.Object.UI
             if (_label == null)
             {
                 var labelTf = CachedTransform.Find("Label");
-                GameObject labelGo;
-                if (labelTf == null)
+                if (labelTf != null)
                 {
-                    labelGo = new GameObject("Label", typeof(RectTransform));
-                    labelGo.transform.SetParent(CachedTransform, false);
+                    labelTf.TryGetComponent(out _label);
                 }
-                else
-                {
-                    labelGo = labelTf.gameObject;
-                }
-
-                if (!labelGo.TryGetComponent(out _label))
-                {
-                    _label = labelGo.AddComponent<Text>();
-                }
-
-                var labelRt = _label.rectTransform;
-                labelRt.anchorMin = Vector2.zero;
-                labelRt.anchorMax = Vector2.one;
-                labelRt.offsetMin = new Vector2(6f, 6f);
-                labelRt.offsetMax = new Vector2(-6f, -6f);
             }
 
-            _label.raycastTarget = false;
-            _label.alignment = TextAnchor.MiddleCenter;
-            _label.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _label.verticalOverflow = VerticalWrapMode.Truncate;
-            _label.fontSize = 26;
-            _label.color = Color.white;
-            if (font != null)
+            if (_label != null)
             {
-                _label.font = font;
+                _label.raycastTarget = false;
+                _label.alignment = TextAnchor.MiddleCenter;
+                _label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                _label.verticalOverflow = VerticalWrapMode.Truncate;
+                _label.fontSize = 26;
+                _label.color = Color.white;
+                if (font != null)
+                {
+                    _label.font = font;
+                }
             }
 
             if (_button == null)

@@ -1,7 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace Backend.Object.UI
@@ -31,7 +29,7 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 프리팹 미배선이어도 타이틀 레이아웃을 채운다.
+        /// 프리팹 자식에 묶인 고정 위젯을 찾아 이벤트를 묶는다.
         /// </summary>
         public void EnsureLayout()
         {
@@ -40,154 +38,34 @@ namespace Backend.Object.UI
                 return;
             }
 
-            EnsureEventSystem();
-
-            var rt = CachedRectTransform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-
-            if (!TryGetComponent(out Image bg))
-            {
-                bg = CachedGameObject.AddComponent<Image>();
-            }
-
-            bg.color = new Color(0.07f, 0.12f, 0.2f, 1f);
-            bg.raycastTarget = true;
-
-            _titleText = FindOrCreateText("Title", new Vector2(0.5f, 0.5f), new Vector2(0f, 180f), new Vector2(900f, 140f), 72f);
-            _titleText.text = "원테이블";
-
-            _startButton = FindOrCreateButton("Start", "시작", new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(360f, 88f));
+            _titleText ??= FindOrCreateText("Title");
+            _startButton ??= FindOrCreateButton("Start");
             BindButton(_startButton, () => StartClicked?.Invoke());
-
             _layoutReady = true;
         }
 
-        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        private Text FindOrCreateText(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var textRt = go.GetComponent<RectTransform>();
-            textRt.anchorMin = anchor;
-            textRt.anchorMax = anchor;
-            textRt.pivot = new Vector2(0.5f, 0.5f);
-            textRt.anchoredPosition = pos;
-            textRt.sizeDelta = size;
-
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            ApplyTextStyle(text, fontSize);
-            return text;
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out Text text) ? text : null;
         }
 
-        private CommonButton FindOrCreateButton(string name, string label, Vector2 anchor, Vector2 pos, Vector2 size)
+        private CommonButton FindOrCreateButton(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CommonButton button))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var buttonRt = go.GetComponent<RectTransform>();
-            buttonRt.anchorMin = anchor;
-            buttonRt.anchorMax = anchor;
-            buttonRt.pivot = new Vector2(0.5f, 0.5f);
-            buttonRt.anchoredPosition = pos;
-            buttonRt.sizeDelta = size;
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 36f);
             return button;
         }
 
-        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
+        private GameObject FindOrCreate(string name)
         {
-            var existing = parent.Find("Label");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var labelRt = go.GetComponent<RectTransform>();
-            labelRt.anchorMin = Vector2.zero;
-            labelRt.anchorMax = Vector2.one;
-            labelRt.offsetMin = Vector2.zero;
-            labelRt.offsetMax = Vector2.zero;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.text = label;
-            ApplyTextStyle(text, fontSize);
-        }
-
-        private void ApplyTextStyle(Text text, float fontSize)
-        {
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            var font = ResolveFont();
-            if (font != null)
-            {
-                text.font = font;
-            }
-        }
-
-        private Font ResolveFont()
-        {
-            return _font != null ? _font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        }
-
-        private static void EnsureEventSystem()
-        {
-            if (EventSystem.current != null)
-            {
-                return;
-            }
-
-            var go = new GameObject("EventSystem");
-            go.AddComponent<EventSystem>();
-            go.AddComponent<InputSystemUIInputModule>();
+            var existing = CachedTransform.Find(name);
+            return existing != null ? existing.gameObject : null;
         }
 
         private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)

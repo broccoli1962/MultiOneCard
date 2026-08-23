@@ -23,7 +23,6 @@ namespace Backend.Object.UI
             "나이스", "수고", "빨리", "가자", "실수", "대박", "고마워", "한판더",
         };
 
-        private const int BodyMaxChars = 80;
         private const int VisibleLines = 30;
 
         [SerializeField] private Font _font;
@@ -31,9 +30,9 @@ namespace Backend.Object.UI
         [SerializeField] private InputField _input;
         [SerializeField] private CommonButton _sendButton;
         [SerializeField] private RectTransform _quickRow;
+        [SerializeField] private CommonButton[] _quickButtons = new CommonButton[8];
 
         private readonly List<string> _lines = new List<string>(VisibleLines);
-        private readonly CommonButton[] _quickButtons = new CommonButton[8];
         private bool _layoutReady;
 
         /// <summary>본문 전송. 80자 이내.</summary>
@@ -46,7 +45,7 @@ namespace Backend.Object.UI
         public string InputText => _input != null ? _input.text : string.Empty;
 
         /// <summary>
-        /// 프리팹 미배선이어도 채팅 레이아웃을 채운다.
+        /// 프리팹 자식에 묶인 채팅 위젯을 찾아 이벤트를 묶는다.
         /// </summary>
         public void EnsureLayout(Font font = null)
         {
@@ -60,67 +59,21 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var rt = CachedRectTransform;
-            if (rt != null)
-            {
-                rt.anchorMin = new Vector2(0f, 0f);
-                rt.anchorMax = new Vector2(1f, 0f);
-                rt.pivot = new Vector2(0.5f, 0f);
-                rt.anchoredPosition = new Vector2(0f, 16f);
-                rt.sizeDelta = new Vector2(-32f, 420f);
-            }
-
-            if (!TryGetComponent(out Image bg))
-            {
-                bg = CachedGameObject.AddComponent<Image>();
-            }
-
-            bg.color = new Color(0.06f, 0.08f, 0.12f, 0.92f);
-            bg.raycastTarget = true;
-
-            _logText = FindOrCreateText("Log", new Vector2(0.5f, 1f), new Vector2(0f, -110f), new Vector2(-24f, 180f), 22f);
-            _logText.alignment = TextAnchor.LowerLeft;
-            _logText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _logText.verticalOverflow = VerticalWrapMode.Overflow;
-            Stretch(_logText.rectTransform, new Vector2(0f, 0.32f), new Vector2(1f, 1f), 12f, 8f, -12f, -8f);
-
-            _quickRow = FindOrCreateRect("QuickRow");
-            Stretch(_quickRow, new Vector2(0f, 0.18f), new Vector2(1f, 0.32f), 8f, 4f, -8f, -4f);
-            if (!_quickRow.TryGetComponent(out HorizontalLayoutGroup quickLayout))
-            {
-                quickLayout = _quickRow.gameObject.AddComponent<HorizontalLayoutGroup>();
-            }
-
-            quickLayout.childAlignment = TextAnchor.MiddleCenter;
-            quickLayout.spacing = 6f;
-            quickLayout.childForceExpandWidth = true;
-            quickLayout.childControlHeight = true;
-            quickLayout.padding = new RectOffset(4, 4, 2, 2);
-
-            for (var i = 0; i < QuickIds.Length; i++)
-            {
-                _quickButtons[i] = FindOrCreateChildButton(_quickRow, "Quick_" + QuickIds[i], QuickLabels[i]);
-            }
-
-            _input = FindOrCreateInput("ChatInput", BodyMaxChars, "채팅 80자");
-            Stretch(_input.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.78f, 0.18f), 8f, 8f, -6f, -8f);
-
-            _sendButton = FindOrCreateButton("Send", "전송", new Vector2(0.89f, 0.09f), new Vector2(0f, 0f), new Vector2(140f, 56f));
-            var sendRt = _sendButton.CachedRectTransform;
-            sendRt.anchorMin = new Vector2(0.8f, 0f);
-            sendRt.anchorMax = new Vector2(1f, 0.18f);
-            sendRt.offsetMin = new Vector2(4f, 8f);
-            sendRt.offsetMax = new Vector2(-8f, -8f);
+            _logText ??= FindOrCreateText("Log");
+            _quickRow ??= FindOrCreateRect("QuickRow");
+            BindQuickButtons();
+            _input ??= FindOrCreateInput("ChatInput");
+            _sendButton ??= FindOrCreateButton("Send");
 
             BindButton(_sendButton, OnSendPressed);
             BindInputEndEdit(_input, OnInputEndEdit);
-            for (var i = 0; i < _quickButtons.Length; i++)
+            for (var i = 0; i < QuickIds.Length; i++)
             {
                 var quickId = QuickIds[i];
-                BindButton(_quickButtons[i], () => QuickClicked?.Invoke(quickId));
+                BindButton(QuickButton(i), () => QuickClicked?.Invoke(quickId));
             }
 
-            if (_lines.Count == 0)
+            if (_logText != null && _lines.Count == 0)
             {
                 _logText.text = string.Empty;
             }
@@ -140,7 +93,10 @@ namespace Backend.Object.UI
                 _lines.RemoveAt(0);
             }
 
-            _logText.text = string.Join("\n", _lines);
+            if (_logText != null)
+            {
+                _logText.text = string.Join("\n", _lines);
+            }
         }
 
         /// <summary>
@@ -253,212 +209,77 @@ namespace Backend.Object.UI
             return who + ": " + (text ?? string.Empty);
         }
 
-        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        private void BindQuickButtons()
         {
-            var go = FindOrCreate(name, typeof(RectTransform), typeof(Text));
-            var textRt = go.GetComponent<RectTransform>();
-            textRt.anchorMin = anchor;
-            textRt.anchorMax = anchor;
-            textRt.pivot = new Vector2(0.5f, 0.5f);
-            textRt.anchoredPosition = pos;
-            textRt.sizeDelta = size;
-            if (!go.TryGetComponent(out Text text))
+            if (_quickButtons == null || _quickButtons.Length != QuickIds.Length)
             {
-                text = go.AddComponent<Text>();
+                _quickButtons = new CommonButton[QuickIds.Length];
             }
 
-            ApplyTextStyle(text, fontSize, TextAnchor.MiddleLeft);
-            return text;
+            if (_quickRow == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < QuickIds.Length; i++)
+            {
+                _quickButtons[i] ??= FindOrCreateChildButton(_quickRow, "Quick_" + QuickIds[i]);
+            }
         }
 
-        private InputField FindOrCreateInput(string name, int characterLimit, string placeholder)
+        private CommonButton QuickButton(int index)
         {
-            var go = FindOrCreate(name, typeof(RectTransform), typeof(Image), typeof(InputField));
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.12f, 0.12f, 0.14f, 0.95f);
-            }
-
-            if (!go.TryGetComponent(out InputField input))
-            {
-                input = go.AddComponent<InputField>();
-            }
-
-            var text = FindOrCreateChildText(go.transform, "Text", Color.white);
-            var place = FindOrCreateChildText(go.transform, "Placeholder", new Color(1f, 1f, 1f, 0.35f));
-            place.text = placeholder;
-            input.textComponent = text;
-            input.placeholder = place;
-            input.characterLimit = characterLimit;
-            input.lineType = InputField.LineType.SingleLine;
-            return input;
+            return _quickButtons != null && index >= 0 && index < _quickButtons.Length
+                ? _quickButtons[index]
+                : null;
         }
 
-        private Text FindOrCreateChildText(Transform parent, string name, Color color)
+        private Text FindOrCreateText(string name)
         {
-            var existing = parent.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var textRt = go.GetComponent<RectTransform>();
-            textRt.anchorMin = Vector2.zero;
-            textRt.anchorMax = Vector2.one;
-            textRt.offsetMin = new Vector2(10f, 4f);
-            textRt.offsetMax = new Vector2(-10f, -4f);
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.color = color;
-            text.raycastTarget = false;
-            text.alignment = TextAnchor.MiddleLeft;
-            text.fontSize = 24;
-            text.supportRichText = false;
-            var font = ResolveFont();
-            if (font != null)
-            {
-                text.font = font;
-            }
-
-            return text;
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out Text text) ? text : null;
         }
 
-        private CommonButton FindOrCreateButton(string name, string label, Vector2 anchor, Vector2 pos, Vector2 size)
+        private InputField FindOrCreateInput(string name)
         {
-            var go = FindOrCreate(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-            var buttonRt = go.GetComponent<RectTransform>();
-            buttonRt.anchorMin = anchor;
-            buttonRt.anchorMax = anchor;
-            buttonRt.pivot = new Vector2(0.5f, 0.5f);
-            buttonRt.anchoredPosition = pos;
-            buttonRt.sizeDelta = size;
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-            }
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out InputField input) ? input : null;
+        }
 
-            if (!go.TryGetComponent(out CommonButton button))
+        private CommonButton FindOrCreateButton(string name)
+        {
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CommonButton button))
             {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 24f);
             return button;
         }
 
-        private CommonButton FindOrCreateChildButton(Transform parent, string name, string label)
+        private CommonButton FindOrCreateChildButton(Transform parent, string name)
         {
             var existing = parent.Find(name);
-            GameObject go;
-            if (existing != null)
+            if (existing == null || !existing.TryGetComponent(out CommonButton button))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(parent, false);
-            }
-
-            go.GetComponent<RectTransform>().sizeDelta = new Vector2(96f, 48f);
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 18f);
             return button;
-        }
-
-        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
-        {
-            var existing = parent.Find("Label");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var labelRt = go.GetComponent<RectTransform>();
-            labelRt.anchorMin = Vector2.zero;
-            labelRt.anchorMax = Vector2.one;
-            labelRt.offsetMin = Vector2.zero;
-            labelRt.offsetMax = Vector2.zero;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.text = label;
-            ApplyTextStyle(text, fontSize, TextAnchor.MiddleCenter);
-        }
-
-        private void ApplyTextStyle(Text text, float fontSize, TextAnchor alignment)
-        {
-            text.fontSize = (int)fontSize;
-            text.alignment = alignment;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            var font = ResolveFont();
-            if (font != null)
-            {
-                text.font = font;
-            }
-        }
-
-        private Font ResolveFont()
-        {
-            return _font != null ? _font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         private RectTransform FindOrCreateRect(string name)
         {
-            return FindOrCreate(name, typeof(RectTransform)).GetComponent<RectTransform>();
+            var go = FindOrCreate(name);
+            return go != null ? go.GetComponent<RectTransform>() : null;
         }
 
-        private GameObject FindOrCreate(string name, params Type[] components)
+        private GameObject FindOrCreate(string name)
         {
             var existing = CachedTransform.Find(name);
-            if (existing != null)
-            {
-                return existing.gameObject;
-            }
-
-            var go = new GameObject(name, components);
-            go.transform.SetParent(CachedTransform, false);
-            return go;
-        }
-
-        private static void Stretch(RectTransform rt, Vector2 min, Vector2 max, float left, float bottom, float right, float top)
-        {
-            rt.anchorMin = min;
-            rt.anchorMax = max;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.offsetMin = new Vector2(left, bottom);
-            rt.offsetMax = new Vector2(right, top);
+            return existing != null ? existing.gameObject : null;
         }
 
         private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)

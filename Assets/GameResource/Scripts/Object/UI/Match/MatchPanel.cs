@@ -4,7 +4,6 @@ using Backend.App;
 using Backend.Net;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace Backend.Object.UI
@@ -30,9 +29,9 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _acceptButton;
         [SerializeField] private CommonButton _surrenderButton;
         [SerializeField] private ChoiceSheet _choiceSheet;
+        [SerializeField] private CardView[] _opponentViews = new CardView[5];
 
         private readonly List<CardView> _handCards = new List<CardView>();
-        private readonly CardView[] _opponentViews = new CardView[5];
         private readonly SeatAnchor[] _seatScratch = new SeatAnchor[5];
         private bool _layoutReady;
         private int _seatCount = 2;
@@ -119,7 +118,7 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 프리팹 미배선이어도 더미 테이블을 만들 수 있게 자식을 채운다.
+        /// 프리팹 자식에 묶인 고정 위젯을 찾아 이벤트를 묶는다.
         /// </summary>
         public void EnsureLayout()
         {
@@ -128,66 +127,52 @@ namespace Backend.Object.UI
                 return;
             }
 
-            EnsureEventSystem();
-
-            var rt = CachedRectTransform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-
-            if (!TryGetComponent(out Image bg))
+            if (_inputGroup == null)
             {
-                bg = CachedGameObject.AddComponent<Image>();
+                TryGetComponent(out _inputGroup);
             }
 
-            bg.color = new Color(0.08f, 0.28f, 0.18f, 1f);
-            bg.raycastTarget = true;
-
-            if (_inputGroup == null && !TryGetComponent(out _inputGroup))
+            _matchHud ??= FindOrCreateComponent<MatchHud>("MatchHud");
+            if (_matchHud != null)
             {
-                _inputGroup = CachedGameObject.AddComponent<CanvasGroup>();
+                _matchHud.EnsureLayout(_font);
             }
 
-            if (_matchHud == null)
-            {
-                var hudGo = FindOrCreate("MatchHud", typeof(RectTransform), typeof(MatchHud));
-                _matchHud = hudGo.GetComponent<MatchHud>();
-            }
-
-            _matchHud.EnsureLayout(_font);
             HideChild("Hud");
-            _statusText = FindOrCreateText("Status", new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(1000f, 56f), 28f);
-            _resultText = FindOrCreateText("Result", new Vector2(0.5f, 0.55f), new Vector2(0f, 80f), new Vector2(900f, 220f), 36f);
+            _statusText ??= FindOrCreateText("Status");
+            _resultText ??= FindOrCreateText("Result");
 
             EnsureOpponentViews();
-            _discardView = FindOrCreateCard("DiscardTop", new Vector2(0.5f, 0.55f), new Vector2(0f, 40f), new Vector2(160f, 224f));
-            _deckView = FindOrCreateCard("Deck", new Vector2(0.5f, 0.55f), new Vector2(-220f, 40f), new Vector2(140f, 196f));
-            _deckView.Clicked -= OnDeckClicked;
-            _deckView.Clicked += OnDeckClicked;
-
-            if (_cardPrefab == null)
+            _discardView ??= FindOrCreateCard("DiscardTop");
+            _deckView ??= FindOrCreateCard("Deck");
+            if (_deckView != null)
             {
-                var templateGo = FindOrCreate("CardTemplate", typeof(RectTransform), typeof(Image), typeof(CardView), typeof(CommonButton));
-                var templateRt = templateGo.GetComponent<RectTransform>();
-                templateRt.sizeDelta = new Vector2(130f, 182f);
-                templateGo.SetActive(false);
-                _cardPrefab = templateGo.GetComponent<CardView>();
+                _deckView.Clicked -= OnDeckClicked;
+                _deckView.Clicked += OnDeckClicked;
+            }
+
+            _cardPrefab ??= FindOrCreateCard("CardTemplate");
+            if (_cardPrefab != null)
+            {
                 _cardPrefab.EnsureParts(_font);
+                _cardPrefab.CachedGameObject.SetActive(false);
             }
 
             if (_handContainer == null || _handLayout == null)
             {
-                var handGo = FindOrCreate("Hand", typeof(RectTransform));
-                _handContainer = handGo.GetComponent<RectTransform>();
-                if (handGo.TryGetComponent(out HorizontalLayoutGroup group))
+                var handGo = FindOrCreate("Hand");
+                if (handGo != null)
                 {
-                    group.enabled = false;
-                }
+                    _handContainer = handGo.GetComponent<RectTransform>();
+                    if (handGo.TryGetComponent(out HorizontalLayoutGroup group))
+                    {
+                        group.enabled = false;
+                    }
 
-                if (_handLayout == null && !handGo.TryGetComponent(out _handLayout))
-                {
-                    _handLayout = handGo.AddComponent<HandLayout>();
+                    if (_handLayout == null)
+                    {
+                        handGo.TryGetComponent(out _handLayout);
+                    }
                 }
             }
 
@@ -198,25 +183,23 @@ namespace Backend.Object.UI
                 _handLayout.CardClicked += OnHandCardClicked;
             }
 
-            _drawButton = FindOrCreateActionButton("Draw", "드로우", new Vector2(0.2f, 0f), new Vector2(-80f, 300f));
-            _acceptButton = FindOrCreateActionButton("Accept", "받기", new Vector2(0.4f, 0f), new Vector2(40f, 300f));
-            _surrenderButton = FindOrCreateActionButton("Surrender", "기권", new Vector2(0.8f, 0f), new Vector2(280f, 300f));
+            _drawButton ??= FindOrCreateButton("Draw");
+            _acceptButton ??= FindOrCreateButton("Accept");
+            _surrenderButton ??= FindOrCreateButton("Surrender");
 
-            if (_choiceSheet == null)
+            _choiceSheet ??= FindOrCreateComponent<ChoiceSheet>("ChoiceSheet");
+            if (_choiceSheet != null)
             {
-                var sheetGo = FindOrCreate("ChoiceSheet", typeof(RectTransform), typeof(ChoiceSheet));
-                _choiceSheet = sheetGo.GetComponent<ChoiceSheet>();
+                _choiceSheet.EnsureLayout(_font);
+                _choiceSheet.SuitClicked -= OnChoiceSuitClicked;
+                _choiceSheet.QueenModeClicked -= OnChoiceQueenClicked;
+                _choiceSheet.KingModeClicked -= OnChoiceKingClicked;
+                _choiceSheet.ConfirmClicked -= OnChoiceConfirmClicked;
+                _choiceSheet.SuitClicked += OnChoiceSuitClicked;
+                _choiceSheet.QueenModeClicked += OnChoiceQueenClicked;
+                _choiceSheet.KingModeClicked += OnChoiceKingClicked;
+                _choiceSheet.ConfirmClicked += OnChoiceConfirmClicked;
             }
-
-            _choiceSheet.EnsureLayout(_font);
-            _choiceSheet.SuitClicked -= OnChoiceSuitClicked;
-            _choiceSheet.QueenModeClicked -= OnChoiceQueenClicked;
-            _choiceSheet.KingModeClicked -= OnChoiceKingClicked;
-            _choiceSheet.ConfirmClicked -= OnChoiceConfirmClicked;
-            _choiceSheet.SuitClicked += OnChoiceSuitClicked;
-            _choiceSheet.QueenModeClicked += OnChoiceQueenClicked;
-            _choiceSheet.KingModeClicked += OnChoiceKingClicked;
-            _choiceSheet.ConfirmClicked += OnChoiceConfirmClicked;
 
             BindButton(_drawButton, () => DrawClicked?.Invoke());
             BindButton(_acceptButton, () => AcceptClicked?.Invoke());
@@ -260,13 +243,23 @@ namespace Backend.Object.UI
                 _matchHud.Bind(match, viewingSeat);
             }
 
-            _statusText.text = status ?? string.Empty;
-            _resultText.text = result ?? string.Empty;
-            _resultText.gameObject.SetActive(!string.IsNullOrEmpty(result));
+            if (_statusText != null)
+            {
+                _statusText.text = status ?? string.Empty;
+            }
+
+            if (_resultText != null)
+            {
+                _resultText.text = result ?? string.Empty;
+                _resultText.gameObject.SetActive(!string.IsNullOrEmpty(result));
+            }
 
             if (match != null)
             {
-                _discardView.BindDiscard(match.discardTop);
+                if (_discardView != null)
+                {
+                    _discardView.BindDiscard(match.discardTop);
+                }
                 if (_deckView != null)
                 {
                     _deckView.BindBack(match.deckCount);
@@ -434,177 +427,59 @@ namespace Backend.Object.UI
             }
         }
 
-        private static void EnsureEventSystem()
+        private Text FindOrCreateText(string name)
         {
-            if (EventSystem.current != null)
-            {
-                return;
-            }
-
-            var go = new GameObject("EventSystem");
-            go.AddComponent<EventSystem>();
-            go.AddComponent<InputSystemUIInputModule>();
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out Text text) ? text : null;
         }
 
-        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        private CardView FindOrCreateCard(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CardView card))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            if (_font != null)
-            {
-                text.font = _font;
-            }
-
-            return text;
-        }
-
-        private CardView FindOrCreateCard(string name, Vector2 anchor, Vector2 pos, Vector2 size)
-        {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CardView), typeof(CommonButton));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-
-            if (!go.TryGetComponent(out CardView card))
-            {
-                card = go.AddComponent<CardView>();
+                return null;
             }
 
             card.EnsureParts(_font);
             return card;
         }
 
-        private CommonButton FindOrCreateActionButton(string name, string label, Vector2 anchor, Vector2 pos)
+        private CommonButton FindOrCreateButton(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CommonButton button))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = new Vector2(200f, 72f);
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 30f);
             return button;
         }
 
-        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
+        private T FindOrCreateComponent<T>(string name) where T : Component
         {
-            var existing = parent.Find("Label");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.text = label;
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            if (_font != null)
-            {
-                text.font = _font;
-            }
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out T component) ? component : null;
         }
 
-        private GameObject FindOrCreate(string name, params Type[] components)
+        private GameObject FindOrCreate(string name)
         {
             var existing = CachedTransform.Find(name);
-            if (existing != null)
-            {
-                return existing.gameObject;
-            }
-
-            var go = new GameObject(name, components);
-            go.transform.SetParent(CachedTransform, false);
-            return go;
+            return existing != null ? existing.gameObject : null;
         }
 
         private void EnsureOpponentViews()
         {
+            if (_opponentViews == null || _opponentViews.Length != 5)
+            {
+                _opponentViews = new CardView[5];
+            }
+
             for (var i = 0; i < _opponentViews.Length; i++)
             {
                 var name = i == 0 ? "OpponentCard" : "Opponent" + i;
-                _opponentViews[i] = FindOrCreateCard(name, new Vector2(0.5f, 1f), new Vector2(0f, -360f), new Vector2(140f, 196f));
+                _opponentViews[i] ??= FindOrCreateCard(name);
             }
 
             _opponentView = _opponentViews[0];

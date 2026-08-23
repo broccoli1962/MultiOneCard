@@ -1,8 +1,6 @@
 using System;
 using Backend.Net;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace Backend.Object.UI
@@ -25,9 +23,9 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _startButton;
         [SerializeField] private CommonButton _rulesButton;
         [SerializeField] private CommonButton _backButton;
+        [SerializeField] private CommonButton[] _slotButtons = new CommonButton[MaxSlots];
+        [SerializeField] private Text[] _slotTexts = new Text[MaxSlots];
 
-        private readonly Text[] _slotTexts = new Text[MaxSlots];
-        private readonly CommonButton[] _slotButtons = new CommonButton[MaxSlots];
         private bool _layoutReady;
 
         /// <summary>내 좌석 준비.</summary>
@@ -66,7 +64,7 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 프리팹 미배선이어도 대기실 레이아웃을 채운다.
+        /// 프리팹 자식에 묶인 고정 위젯을 찾아 이벤트를 묶는다.
         /// </summary>
         public void EnsureLayout()
         {
@@ -75,75 +73,34 @@ namespace Backend.Object.UI
                 return;
             }
 
-            EnsureEventSystem();
-
-            var rt = CachedRectTransform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-
-            if (!TryGetComponent(out Image bg))
+            _titleText ??= FindOrCreateText("Title");
+            _roomCodeText ??= FindOrCreateText("RoomCode");
+            EnsureSlots();
+            _readyButton ??= FindOrCreateButton("Ready");
+            _startButton ??= FindOrCreateButton("Start");
+            _rulesButton ??= FindOrCreateButton("Rules");
+            _statusText ??= FindOrCreateText("Status");
+            _backButton ??= FindOrCreateButton("Back");
+            _chatView ??= FindOrCreateChat();
+            _rulesRoot ??= FindOrCreate("RulesRoot");
+            if (_rulesText == null && _rulesRoot != null)
             {
-                bg = CachedGameObject.AddComponent<Image>();
+                var body = _rulesRoot.transform.Find("RulesBody");
+                if (body != null)
+                {
+                    body.TryGetComponent(out _rulesText);
+                }
             }
 
-            bg.color = new Color(0.08f, 0.13f, 0.2f, 1f);
-            bg.raycastTarget = true;
-
-            _titleText = FindOrCreateText("Title", new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(640f, 64f), 42f);
-            _titleText.text = "대기실";
-
-            _roomCodeText = FindOrCreateText("RoomCode", new Vector2(0.5f, 1f), new Vector2(0f, -130f), new Vector2(640f, 48f), 30f);
-            _roomCodeText.text = "코드 ------";
-
-            for (var i = 0; i < MaxSlots; i++)
+            if (_chatView != null)
             {
-                var y = -200f - i * 56f;
-                _slotButtons[i] = FindOrCreateButton("Slot" + i, "빈 자리", new Vector2(0.5f, 1f), new Vector2(0f, y), new Vector2(640f, 50f));
-                _slotTexts[i] = _slotButtons[i].GetComponentInChildren<Text>();
+                _chatView.EnsureLayout(_font);
             }
 
-            _readyButton = FindOrCreateButton("Ready", "준비", new Vector2(0.5f, 1f), new Vector2(-220f, -560f), new Vector2(200f, 64f));
-            _startButton = FindOrCreateButton("Start", "시작", new Vector2(0.5f, 1f), new Vector2(0f, -560f), new Vector2(200f, 64f));
-            _rulesButton = FindOrCreateButton("Rules", "규칙", new Vector2(0.5f, 1f), new Vector2(220f, -560f), new Vector2(200f, 64f));
-
-            _statusText = FindOrCreateText("Status", new Vector2(0.5f, 1f), new Vector2(0f, -620f), new Vector2(900f, 40f), 24f);
-            _statusText.text = string.Empty;
-
-            _backButton = FindOrCreateButton("Back", "뒤로", new Vector2(0f, 1f), new Vector2(90f, -70f), new Vector2(140f, 64f));
-            var backRt = _backButton.CachedRectTransform;
-            backRt.anchorMin = new Vector2(0f, 1f);
-            backRt.anchorMax = new Vector2(0f, 1f);
-            backRt.pivot = new Vector2(0.5f, 0.5f);
-            backRt.anchoredPosition = new Vector2(90f, -70f);
-
-            _chatView = FindOrCreateChat();
-            _chatView.EnsureLayout(_font);
-
-            _rulesRoot = FindOrCreate("RulesRoot", typeof(RectTransform), typeof(Image));
-            var rulesRt = _rulesRoot.GetComponent<RectTransform>();
-            rulesRt.anchorMin = new Vector2(0.1f, 0.22f);
-            rulesRt.anchorMax = new Vector2(0.9f, 0.82f);
-            rulesRt.offsetMin = Vector2.zero;
-            rulesRt.offsetMax = Vector2.zero;
-            if (_rulesRoot.TryGetComponent(out Image rulesBg))
+            if (_rulesRoot != null)
             {
-                rulesBg.color = new Color(0.1f, 0.12f, 0.16f, 0.96f);
-                rulesBg.raycastTarget = true;
+                _rulesRoot.SetActive(false);
             }
-
-            _rulesText = FindOrCreateChildText(_rulesRoot.transform, "RulesBody", 24f);
-            _rulesText.alignment = TextAnchor.UpperLeft;
-            _rulesText.text =
-                "공식 규칙\n" +
-                "인원 2~6. 턴 15초.\n" +
-                "같은 무늬 또는 같은 랭크.\n" +
-                "조커·무색은 알약 락이 없으면 아무 위에도 가능.\n" +
-                "한 턴 1장. 예외는 K.\n" +
-                "손패 0장이면 1위.\n" +
-                "퀵매치는 항상 공식.";
-            _rulesRoot.SetActive(false);
 
             BindButton(_readyButton, () => ReadyClicked?.Invoke());
             BindButton(_startButton, () => StartClicked?.Invoke());
@@ -152,7 +109,8 @@ namespace Backend.Object.UI
             for (var i = 0; i < MaxSlots; i++)
             {
                 var seat = i;
-                BindButton(_slotButtons[i], () => SlotClicked?.Invoke(seat));
+                var button = SlotButton(i);
+                BindButton(button, () => SlotClicked?.Invoke(seat));
             }
 
             _layoutReady = true;
@@ -165,8 +123,16 @@ namespace Backend.Object.UI
         {
             EnsureLayout();
             var code = room != null && !string.IsNullOrEmpty(room.roomCode) ? room.roomCode : "------";
-            _roomCodeText.text = "코드 " + code;
-            _statusText.text = status ?? string.Empty;
+            if (_roomCodeText != null)
+            {
+                _roomCodeText.text = "코드 " + code;
+            }
+
+            if (_statusText != null)
+            {
+                _statusText.text = status ?? string.Empty;
+            }
+
             if (_startButton != null)
             {
                 _startButton.CachedGameObject.SetActive(isHost);
@@ -186,12 +152,14 @@ namespace Backend.Object.UI
             for (var i = 0; i < MaxSlots; i++)
             {
                 var show = i < seatCount;
-                if (_slotButtons[i] != null)
+                var button = SlotButton(i);
+                if (button != null)
                 {
-                    _slotButtons[i].CachedGameObject.SetActive(show);
+                    button.CachedGameObject.SetActive(show);
                 }
 
-                if (!show || _slotTexts[i] == null)
+                var slotText = SlotText(i);
+                if (!show || slotText == null)
                 {
                     continue;
                 }
@@ -200,7 +168,7 @@ namespace Backend.Object.UI
                 var ready = room != null && room.ready != null && i < room.ready.Length && room.ready[i];
                 var host = room != null && i == room.hostSeat;
                 var mine = i == localSeat;
-                _slotTexts[i].text = $"좌석{i + 1}  {nick}  {(ready ? "준비" : "대기")}{(host ? " 방장" : string.Empty)}{(mine ? " 나" : string.Empty)}";
+                slotText.text = $"좌석{i + 1}  {nick}  {(ready ? "준비" : "대기")}{(host ? " 방장" : string.Empty)}{(mine ? " 나" : string.Empty)}";
             }
 
             var localReady = room != null && room.ready != null && localSeat >= 0 && localSeat < room.ready.Length
@@ -246,191 +214,70 @@ namespace Backend.Object.UI
             }
         }
 
+        private void EnsureSlots()
+        {
+            if (_slotButtons == null || _slotButtons.Length != MaxSlots)
+            {
+                _slotButtons = new CommonButton[MaxSlots];
+            }
+
+            if (_slotTexts == null || _slotTexts.Length != MaxSlots)
+            {
+                _slotTexts = new Text[MaxSlots];
+            }
+
+            for (var i = 0; i < MaxSlots; i++)
+            {
+                _slotButtons[i] ??= FindOrCreateButton("Slot" + i);
+                if (_slotTexts[i] == null && _slotButtons[i] != null)
+                {
+                    _slotTexts[i] = _slotButtons[i].GetComponentInChildren<Text>();
+                }
+            }
+        }
+
+        private CommonButton SlotButton(int index)
+        {
+            return _slotButtons != null && index >= 0 && index < _slotButtons.Length
+                ? _slotButtons[index]
+                : null;
+        }
+
+        private Text SlotText(int index)
+        {
+            return _slotTexts != null && index >= 0 && index < _slotTexts.Length
+                ? _slotTexts[index]
+                : null;
+        }
+
         private ChatView FindOrCreateChat()
         {
-            var existing = CachedTransform.Find("ChatView");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("ChatView", typeof(RectTransform), typeof(Image), typeof(ChatView));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            if (!go.TryGetComponent(out ChatView chat))
-            {
-                chat = go.AddComponent<ChatView>();
-            }
-
-            return chat;
+            var go = FindOrCreate("ChatView");
+            return go != null && go.TryGetComponent(out ChatView chat) ? chat : null;
         }
 
-        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        private Text FindOrCreateText(string name)
         {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var textRt = go.GetComponent<RectTransform>();
-            textRt.anchorMin = anchor;
-            textRt.anchorMax = anchor;
-            textRt.pivot = new Vector2(0.5f, 0.5f);
-            textRt.anchoredPosition = pos;
-            textRt.sizeDelta = size;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            ApplyTextStyle(text, fontSize, TextAnchor.MiddleCenter);
-            return text;
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out Text text) ? text : null;
         }
 
-        private Text FindOrCreateChildText(Transform parent, string name, float fontSize)
+        private CommonButton FindOrCreateButton(string name)
         {
-            var existing = parent.Find(name);
-            GameObject go;
-            if (existing != null)
+            var go = FindOrCreate(name);
+            if (go == null || !go.TryGetComponent(out CommonButton button))
             {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var textRt = go.GetComponent<RectTransform>();
-            textRt.anchorMin = Vector2.zero;
-            textRt.anchorMax = Vector2.one;
-            textRt.offsetMin = new Vector2(24f, 16f);
-            textRt.offsetMax = new Vector2(-24f, -16f);
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            ApplyTextStyle(text, fontSize, TextAnchor.UpperLeft);
-            return text;
-        }
-
-        private CommonButton FindOrCreateButton(string name, string label, Vector2 anchor, Vector2 pos, Vector2 size)
-        {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var buttonRt = go.GetComponent<RectTransform>();
-            buttonRt.anchorMin = anchor;
-            buttonRt.anchorMax = anchor;
-            buttonRt.pivot = new Vector2(0.5f, 0.5f);
-            buttonRt.anchoredPosition = pos;
-            buttonRt.sizeDelta = size;
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
+                return null;
             }
 
             button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 26f);
             return button;
         }
 
-        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
-        {
-            var existing = parent.Find("Label");
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(parent, false);
-            }
-
-            var labelRt = go.GetComponent<RectTransform>();
-            labelRt.anchorMin = Vector2.zero;
-            labelRt.anchorMax = Vector2.one;
-            labelRt.offsetMin = Vector2.zero;
-            labelRt.offsetMax = Vector2.zero;
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.text = label;
-            ApplyTextStyle(text, fontSize, TextAnchor.MiddleCenter);
-        }
-
-        private void ApplyTextStyle(Text text, float fontSize, TextAnchor alignment)
-        {
-            text.fontSize = (int)fontSize;
-            text.alignment = alignment;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            var font = ResolveFont();
-            if (font != null)
-            {
-                text.font = font;
-            }
-        }
-
-        private Font ResolveFont()
-        {
-            return _font != null ? _font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        }
-
-        private GameObject FindOrCreate(string name, params Type[] components)
+        private GameObject FindOrCreate(string name)
         {
             var existing = CachedTransform.Find(name);
-            if (existing != null)
-            {
-                return existing.gameObject;
-            }
-
-            var go = new GameObject(name, components);
-            go.transform.SetParent(CachedTransform, false);
-            return go;
-        }
-
-        private static void EnsureEventSystem()
-        {
-            if (EventSystem.current != null)
-            {
-                return;
-            }
-
-            var go = new GameObject("EventSystem");
-            go.AddComponent<EventSystem>();
-            go.AddComponent<InputSystemUIInputModule>();
+            return existing != null ? existing.gameObject : null;
         }
 
         private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)

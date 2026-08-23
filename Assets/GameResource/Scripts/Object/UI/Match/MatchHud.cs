@@ -17,7 +17,7 @@ namespace Backend.Object.UI
         private string _hudBase = string.Empty;
 
         /// <summary>
-        /// 프리팹 미배선이어도 HUD 텍스트를 채운다.
+        /// 프리팹 자식에 묶인 HUD 텍스트를 찾는다.
         /// </summary>
         public void EnsureLayout(Font font)
         {
@@ -31,14 +31,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var rt = CachedRectTransform;
-            rt.anchorMin = new Vector2(0.5f, 1f);
-            rt.anchorMax = new Vector2(0.5f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(0f, -12f);
-            rt.sizeDelta = new Vector2(1000f, 140f);
-
-            _hudText = FindOrCreateText("HudText", 30f);
+            _hudText ??= FindOrCreateText("HudText");
             _layoutReady = true;
         }
 
@@ -114,43 +107,10 @@ namespace Backend.Object.UI
             return "-";
         }
 
-        private Text FindOrCreateText(string name, float fontSize)
+        private Text FindOrCreateText(string name)
         {
             var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Text));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-
-            if (!go.TryGetComponent(out Text text))
-            {
-                text = go.AddComponent<Text>();
-            }
-
-            text.fontSize = (int)fontSize;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.color = Color.white;
-            text.raycastTarget = false;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            if (_font != null)
-            {
-                text.font = _font;
-            }
-
-            return text;
+            return existing != null && existing.TryGetComponent(out Text text) ? text : null;
         }
     }
 }
