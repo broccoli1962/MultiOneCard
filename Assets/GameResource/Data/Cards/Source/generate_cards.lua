@@ -369,18 +369,57 @@ local function opaqueBounds(src)
   return minx, miny, maxx, maxy
 end
 
-local function fitKeyed(name, maxW, maxH, method)
+local function softenEdge(src)
+  local w, h = src.width, src.height
+  local dst = Image(w, h, ColorMode.RGB)
+  dst:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
+  for y = 0, h - 1 do
+    for x = 0, w - 1 do
+      local c = Color(src:getPixel(x, y))
+      if c.alpha > 8 then
+        local empty = 0
+        for oy = -2, 2 do
+          for ox = -2, 2 do
+            local nx, ny = x + ox, y + oy
+            local a = 0
+            if nx >= 0 and ny >= 0 and nx < w and ny < h then
+              a = Color(src:getPixel(nx, ny)).alpha
+            end
+            if a < 16 then
+              empty = empty + 1
+            end
+          end
+        end
+        if empty > 0 then
+          c.alpha = clamp8(c.alpha * (1 - empty / 36))
+        end
+        dst:putPixel(x, y, c)
+      end
+    end
+  end
+  return dst
+end
+
+local function fitKeyed(name, maxW, maxH, method, soften)
   method = method or "bilinear"
-  local key = "fit:" .. method .. ":" .. name .. ":" .. maxW .. "x" .. maxH
+  local key = "fit:" .. method .. ":" .. tostring(soften) .. ":" .. name .. ":" .. maxW .. "x" .. maxH
   if sizedCache[key] then
     return sizedCache[key]
   end
   local src = keyed(name)
   local x0, y0, x1, y1 = opaqueBounds(src)
+  local pad = soften and 3 or 0
+  x0 = math.max(0, x0 - pad)
+  y0 = math.max(0, y0 - pad)
+  x1 = math.min(src.width - 1, x1 + pad)
+  y1 = math.min(src.height - 1, y1 + pad)
   local cw, ch = x1 - x0 + 1, y1 - y0 + 1
   local crop = Image(cw, ch, ColorMode.RGB)
   crop:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
   crop:drawImage(src, Point(-x0, -y0))
+  if soften then
+    crop = softenEdge(crop)
+  end
   local scale = math.min(maxW / cw, maxH / ch)
   local nw = math.max(1, math.floor(cw * scale + 0.5))
   local nh = math.max(1, math.floor(ch * scale + 0.5))
@@ -397,6 +436,58 @@ end
 
 local function blitCentered(dst, src, cx, cy)
   blit(dst, src, math.floor(cx - src.width * 0.5), math.floor(cy - src.height * 0.5))
+end
+
+local function isNearCream(c)
+  local r, g, b = c.red, c.green, c.blue
+  if r < 215 or g < 200 or b > 230 then
+    return false
+  end
+  return (r - b) >= 16 and (g - b) >= 10 and math.abs(r - g) < 22
+end
+
+local function fitRecolor(name, maxW, maxH)
+  local key = "recolor:" .. name .. ":" .. maxW .. "x" .. maxH
+  if sizedCache[key] then
+    return sizedCache[key]
+  end
+  local src = raw(name):clone()
+  for y = 0, src.height - 1 do
+    for x = 0, src.width - 1 do
+      local c = Color(src:getPixel(x, y))
+      if isCream(c) or isNearCream(c) then
+        src:putPixel(x, y, FACE_INNER)
+      end
+    end
+  end
+  local scale = math.min(maxW / src.width, maxH / src.height)
+  local nw = math.max(1, math.floor(src.width * scale + 0.5))
+  local nh = math.max(1, math.floor(src.height * scale + 0.5))
+  if nw ~= src.width or nh ~= src.height then
+    src:resize{ size = Size(nw, nh), method = "bilinear" }
+  end
+  local blended = src:clone()
+  for y = 1, src.height - 2 do
+    for x = 1, src.width - 2 do
+      local c = Color(src:getPixel(x, y))
+      if math.abs(c.red - FACE_INNER.red) > 4 or math.abs(c.green - FACE_INNER.green) > 4 then
+        local faceN = 0
+        for oy = -1, 1 do
+          for ox = -1, 1 do
+            local n = Color(src:getPixel(x + ox, y + oy))
+            if math.abs(n.red - FACE_INNER.red) <= 4 and math.abs(n.green - FACE_INNER.green) <= 4 then
+              faceN = faceN + 1
+            end
+          end
+        end
+        if faceN > 0 and faceN < 8 then
+          blended:putPixel(x, y, lerpCol(c, FACE_INNER, 0.22 + 0.08 * faceN))
+        end
+      end
+    end
+  end
+  sizedCache[key] = blended
+  return blended
 end
 
 local function makeMoonDisc(name, r)
@@ -605,7 +696,7 @@ local function drawJoker(kind)
 end
 
 local function drawSpecial(id)
-  local file, caption, maxW, maxH, cy, method
+  local file, caption, maxW, maxH, cy, method, soften
   if id == "SPEC:SPEAR" then
     file, caption, maxW, maxH, cy = "spec_spear.png", "SPEAR", 420, 700, 500
   elseif id == "SPEC:PASS" then
@@ -613,7 +704,7 @@ local function drawSpecial(id)
   elseif id == "SPEC:REVJOKER" then
     file, caption, maxW, maxH, cy = "spec_rev.png", "RE", 520, 520, 500
   elseif id == "SPEC:COUNTER" then
-    file, caption, maxW, maxH, cy, method = "spec_counter.png", "CTR", 540, 640, 500, "nearest"
+    file, caption, maxW, maxH, cy = "spec_counter.png", "CTR", 560, 720, 500
   elseif id == "SPEC:MIRROR" then
     file, caption, maxW, maxH, cy = "spec_mirror.png", "MIRROR", 480, 640, 500
   elseif id == "SPEC:PILL_BK" then
@@ -624,7 +715,11 @@ local function drawSpecial(id)
     file, caption, maxW, maxH, cy = "spec_pill_bl.png", "PILL", 520, 240, 500
   end
   local img = newWildFace()
-  blitCentered(img, fitKeyed(file, maxW, maxH, method), CX, cy)
+  if id == "SPEC:COUNTER" then
+    blitCentered(img, fitRecolor(file, maxW, maxH), CX, cy)
+  else
+    blitCentered(img, fitKeyed(file, maxW, maxH, method, soften), CX, cy)
+  end
   drawCaptionRainbow(img, caption)
   return img
 end
