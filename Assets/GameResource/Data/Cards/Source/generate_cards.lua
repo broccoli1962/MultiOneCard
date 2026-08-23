@@ -117,6 +117,44 @@ local function fillRoundRect(img, col)
   end
 end
 
+local RAIN_STOPS = {
+  C(196, 42, 48),
+  C(28, 28, 32),
+  C(36, 78, 186),
+  C(140, 40, 170),
+}
+
+local function atan2(y, x)
+  if x > 0 then
+    return math.atan(y / x)
+  end
+  if x < 0 and y >= 0 then
+    return math.atan(y / x) + math.pi
+  end
+  if x < 0 then
+    return math.atan(y / x) - math.pi
+  end
+  if y > 0 then
+    return math.pi * 0.5
+  end
+  if y < 0 then
+    return -math.pi * 0.5
+  end
+  return 0
+end
+
+local function rainbowAt(t)
+  t = t % 1
+  if t < 0 then
+    t = t + 1
+  end
+  local n = #RAIN_STOPS
+  local x = t * n
+  local i = math.floor(x) % n
+  local f = x - math.floor(x)
+  return lerpCol(RAIN_STOPS[i + 1], RAIN_STOPS[(i + 1) % n + 1], f)
+end
+
 local function strokeRoundRect(img, inset, thick, col)
   local rw, rh = W - inset * 2, H - inset * 2
   local rad = math.max(6, RAD - inset)
@@ -124,6 +162,22 @@ local function strokeRoundRect(img, inset, thick, col)
     for x = 0, rw + 1 do
       local d = sdfRoundRect(x + 0.5, y + 0.5, rw, rh, rad)
       stampCover(img, x + inset, y + inset, col, math.min(0.5 - d, d + thick + 0.5))
+    end
+  end
+end
+
+local function strokeRoundRectRainbow(img, inset, thick, phase)
+  local rw, rh = W - inset * 2, H - inset * 2
+  local rad = math.max(6, RAD - inset)
+  for y = 0, rh + 1 do
+    for x = 0, rw + 1 do
+      local d = sdfRoundRect(x + 0.5, y + 0.5, rw, rh, rad)
+      local a = math.min(0.5 - d, d + thick + 0.5)
+      if a > 0 then
+        local px, py = x + inset, y + inset
+        local t = atan2(py - CY, px - CX) / (2 * math.pi) + 0.5 + (phase or 0)
+        stampCover(img, px, py, rainbowAt(t), a)
+      end
     end
   end
 end
@@ -199,6 +253,27 @@ local function stampText(img, text, ox, oy, col, scale, flip)
   end
 end
 
+local function stampTextRainbow(img, text, ox, oy, scale, flip)
+  local glyphs = 0
+  for i = 1, #text do
+    if GLYPH[text:sub(i, i)] then
+      glyphs = glyphs + 1
+    end
+  end
+  local k, x = 0, ox
+  for i = 1, #text do
+    local ch = text:sub(i, i)
+    local g = GLYPH[ch]
+    if g then
+      stamp(img, g, x, oy, rainbowAt((k + 0.5) / math.max(glyphs, 1)), scale, flip)
+      x = x + (5 * scale) + scale
+      k = k + 1
+    elseif ch == " " then
+      x = x + 3 * scale
+    end
+  end
+end
+
 local function suitInk(suit)
   if suit == "H" or suit == "D" then
     return INK_RED
@@ -218,7 +293,12 @@ local function loadImg(path)
 end
 
 local function isCream(c)
-  return c.red > 218 and c.green > 200 and c.blue > 165 and (c.red + c.green) > c.blue + 140
+  local r, g, b = c.red, c.green, c.blue
+  if r < 228 or g < 218 or b < 175 or b > 232 then
+    return false
+  end
+  -- Warm parchment only. Neutral white (pill shells, ticket paper highlights) stays.
+  return (r - b) >= 18 and (g - b) >= 12
 end
 
 local function punchCream(src)
@@ -271,6 +351,49 @@ local function blit(dst, src, ox, oy)
   dst:drawImage(src, Point(ox, oy))
 end
 
+local function opaqueBounds(src)
+  local minx, miny, maxx, maxy = src.width, src.height, -1, -1
+  for y = 0, src.height - 1 do
+    for x = 0, src.width - 1 do
+      if Color(src:getPixel(x, y)).alpha > 20 then
+        if x < minx then minx = x end
+        if y < miny then miny = y end
+        if x > maxx then maxx = x end
+        if y > maxy then maxy = y end
+      end
+    end
+  end
+  if maxx < minx then
+    return 0, 0, src.width - 1, src.height - 1
+  end
+  return minx, miny, maxx, maxy
+end
+
+local function fitKeyed(name, maxW, maxH)
+  local key = "fit:" .. name .. ":" .. maxW .. "x" .. maxH
+  if sizedCache[key] then
+    return sizedCache[key]
+  end
+  local src = keyed(name)
+  local x0, y0, x1, y1 = opaqueBounds(src)
+  local cw, ch = x1 - x0 + 1, y1 - y0 + 1
+  local crop = Image(cw, ch, ColorMode.RGB)
+  crop:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
+  crop:drawImage(src, Point(-x0, -y0))
+  local scale = math.min(maxW / cw, maxH / ch)
+  local nw = math.max(1, math.floor(cw * scale + 0.5))
+  local nh = math.max(1, math.floor(ch * scale + 0.5))
+  if nw ~= crop.width or nh ~= crop.height then
+    crop:resize{ size = Size(nw, nh), method = "bilinear" }
+  end
+  sizedCache[key] = crop
+  return crop
+end
+
+local function blitCentered(dst, src, cx, cy)
+  blit(dst, src, math.floor(cx - src.width * 0.5), math.floor(cy - src.height * 0.5))
+end
+
 local function makeMoonDisc(name, r)
   local key = "moon:" .. name .. ":" .. r
   if sizedCache[key] then
@@ -302,19 +425,35 @@ local function makeMoonDisc(name, r)
 end
 
 local function drawFiligree(img, border)
-  local function arm(x, y, sx, sy)
+  local function arm(x, y, sx, sy, col)
     for i = 0, 40 do
       put(img, x + i * sx, y, GOLD)
       put(img, x, y + i * sy, GOLD)
     end
     fillCircle(img, x + 28 * sx, y, 3, GOLD_LIGHT)
     fillCircle(img, x, y + 28 * sy, 3, GOLD_LIGHT)
-    fillCircle(img, x + 10 * sx, y + 10 * sy, 3, border)
+    fillCircle(img, x + 10 * sx, y + 10 * sy, 3, col)
   end
-  arm(48, 48, 1, 1)
-  arm(W - 49, 48, -1, 1)
-  arm(48, H - 49, 1, -1)
-  arm(W - 49, H - 49, -1, -1)
+  arm(48, 48, 1, 1, border)
+  arm(W - 49, 48, -1, 1, border)
+  arm(48, H - 49, 1, -1, border)
+  arm(W - 49, H - 49, -1, -1, border)
+end
+
+local function drawFiligreeRainbow(img)
+  local function arm(x, y, sx, sy, col)
+    for i = 0, 40 do
+      put(img, x + i * sx, y, col)
+      put(img, x, y + i * sy, col)
+    end
+    fillCircle(img, x + 28 * sx, y, 3, GOLD_LIGHT)
+    fillCircle(img, x, y + 28 * sy, 3, GOLD_LIGHT)
+    fillCircle(img, x + 10 * sx, y + 10 * sy, 3, col)
+  end
+  arm(48, 48, 1, 1, INK_RED)
+  arm(W - 49, 48, -1, 1, INK_BLUE)
+  arm(48, H - 49, 1, -1, INK_BLACK)
+  arm(W - 49, H - 49, -1, -1, GOLD)
 end
 
 local function paintFaceBase(img, border)
@@ -329,6 +468,18 @@ local function paintFaceBase(img, border)
   drawFiligree(img, border)
 end
 
+local function paintFaceBaseRainbow(img)
+  fillRoundRect(img, FACE)
+  for y = 72, H - 73 do
+    for x = 56, W - 57 do
+      put(img, x, y, FACE_INNER)
+    end
+  end
+  strokeRoundRectRainbow(img, 8, 7, 0)
+  strokeRoundRectRainbow(img, 22, 4, 0.18)
+  drawFiligreeRainbow(img)
+end
+
 local faceCache = {}
 local function newFace(border)
   local key = border.red .. "," .. border.green .. "," .. border.blue
@@ -341,10 +492,26 @@ local function newFace(border)
   return faceCache[key]:clone()
 end
 
+local function newWildFace()
+  if not faceCache.wild then
+    local img = Image(W, H, ColorMode.RGB)
+    img:clear(C(0, 0, 0))
+    paintFaceBaseRainbow(img)
+    faceCache.wild = img
+  end
+  return faceCache.wild:clone()
+end
+
 local function drawCaption(img, text, col)
   local scale = 6
   local tw = textWidth(text, scale)
   stampText(img, text, math.floor((W - tw) / 2), H - 92, col, scale, false)
+end
+
+local function drawCaptionRainbow(img, text)
+  local scale = 6
+  local tw = textWidth(text, scale)
+  stampTextRainbow(img, text, math.floor((W - tw) / 2), H - 92, scale, false)
 end
 
 local function drawCornerIndex(img, rank, suit, ink)
@@ -423,7 +590,7 @@ local function drawJoker(kind)
   else
     moonFile, border, fill, ring = "moon_blue.png", C(40, 86, 196), C(8, 14, 38), C(120, 170, 255)
   end
-  local img = newFace(border)
+  local img = newWildFace()
   local r = CLIP - 6
   fillCircle(img, CX, CY, CLIP, fill)
   blit(img, makeMoonDisc(moonFile, r), CX - r, CY - r)
@@ -433,27 +600,27 @@ local function drawJoker(kind)
 end
 
 local function drawSpecial(id)
-  local file, border, caption, capCol
+  local file, caption, maxW, maxH, cy
   if id == "SPEC:SPEAR" then
-    file, border, caption, capCol = "spec_spear.png", SPEC_BORDER, "SPEAR", INK_BLACK
+    file, caption, maxW, maxH, cy = "spec_spear.png", "SPEAR", 420, 700, 500
   elseif id == "SPEC:PASS" then
-    file, border, caption, capCol = "spec_pass.png", SPEC_BORDER, "PASS", INK_BLACK
+    file, caption, maxW, maxH, cy = "spec_pass.png", "PASS", 560, 420, 500
   elseif id == "SPEC:REVJOKER" then
-    file, border, caption, capCol = "spec_rev.png", SPEC_BORDER, "REV", INK_BLACK
+    file, caption, maxW, maxH, cy = "spec_rev.png", "RE", 520, 520, 500
   elseif id == "SPEC:COUNTER" then
-    file, border, caption, capCol = "spec_counter.png", SPEC_BORDER, "CTR", INK_BLACK
+    file, caption, maxW, maxH, cy = "spec_counter.png", "CTR", 540, 640, 500
   elseif id == "SPEC:MIRROR" then
-    file, border, caption, capCol = "spec_mirror.png", SPEC_BORDER, "MIRROR", INK_BLUE
+    file, caption, maxW, maxH, cy = "spec_mirror.png", "MIRROR", 480, 640, 500
   elseif id == "SPEC:PILL_BK" then
-    file, border, caption, capCol = "spec_pill_bk.png", PILL_BK, "PILL BK", PILL_BK
+    file, caption, maxW, maxH, cy = "spec_pill_bk.png", "PILL", 520, 240, 500
   elseif id == "SPEC:PILL_RD" then
-    file, border, caption, capCol = "spec_pill_rd.png", PILL_RD, "PILL RD", PILL_RD
+    file, caption, maxW, maxH, cy = "spec_pill_rd.png", "PILL", 520, 240, 500
   else
-    file, border, caption, capCol = "spec_pill_bl.png", PILL_BL, "PILL BL", PILL_BL
+    file, caption, maxW, maxH, cy = "spec_pill_bl.png", "PILL", 520, 240, 500
   end
-  local img = newFace(border)
-  blit(img, sized(file, 576, 768, true), 96, 120)
-  drawCaption(img, caption, capCol)
+  local img = newWildFace()
+  blitCentered(img, fitKeyed(file, maxW, maxH), CX, cy)
+  drawCaptionRainbow(img, caption)
   return img
 end
 
@@ -485,31 +652,33 @@ local specials = {
   "SPEC:PILL_BK", "SPEC:PILL_RD", "SPEC:PILL_BL",
 }
 
--- Jokers and leftover low-res cards first so a timeout still ships the moon.
 local cards = {}
 for _, id in ipairs(specials) do
   cards[#cards + 1] = { id = id, kind = "spec" }
-end
-for _, s in ipairs(suits) do
-  for _, r in ipairs(ranks) do
-    cards[#cards + 1] = { id = s .. r, kind = "trump", suit = s, rank = r }
-  end
 end
 
 do
   local f = io.open(LOG, "w")
   if f then
-    f:write("compose start\n")
+    f:write("compose wilds start\n")
     f:close()
   end
 end
 
-local spr = Sprite(W, H, ColorMode.RGB)
-spr.filename = SRC
+local spr
+local opened, openedSpr = pcall(function()
+  return app.open(SRC)
+end)
+if opened and openedSpr then
+  spr = openedSpr
+else
+  spr = Sprite(W, H, ColorMode.RGB)
+  spr.filename = SRC
+end
 app.activeSprite = spr
 local bgLayer = spr.layers[1]
 bgLayer.name = "Background"
-while #spr.frames < (#cards + 1) do
+while #spr.frames < #cards do
   spr:newFrame()
 end
 
@@ -520,27 +689,26 @@ local function paintCel(frame, img)
 end
 
 for i, card in ipairs(cards) do
-  local composed
-  if card.kind == "trump" then
-    composed = drawTrump(card.suit, card.rank)
-  elseif card.id == "JOKER:BW" then
-    composed = drawJoker("BW")
-  elseif card.id == "JOKER:COLOR" then
-    composed = drawJoker("COLOR")
-  elseif card.id == "JOKER:MOON" then
-    composed = drawJoker("MOON")
-  else
-    composed = drawSpecial(card.id)
+  local ok, composed = pcall(function()
+    if card.id == "JOKER:BW" then
+      return drawJoker("BW")
+    elseif card.id == "JOKER:COLOR" then
+      return drawJoker("COLOR")
+    elseif card.id == "JOKER:MOON" then
+      return drawJoker("MOON")
+    end
+    return drawSpecial(card.id)
+  end)
+  if not ok then
+    log("error " .. card.id .. " " .. tostring(composed))
+    error(composed)
   end
   paintCel(spr.frames[i], composed)
   composed:saveAs(OUT .. "/" .. fileName(card.id))
-  if i == 1 or i == 3 or i % 10 == 0 then
-    log(string.format("card %d/%d %s", i, #cards, card.id))
-  end
+  log(string.format("card %d/%d %s", i, #cards, card.id))
 end
 
-local backImg = drawBack()
-paintCel(spr.frames[#cards + 1], backImg)
-backImg:saveAs(OUT .. "/BACK.png")
-spr:saveAs(SRC)
-log("exported " .. #cards .. " fronts + BACK at " .. W .. "x" .. H)
+if opened and openedSpr then
+  spr:saveAs(SRC)
+end
+log("exported " .. #cards .. " wild fronts at " .. W .. "x" .. H)
