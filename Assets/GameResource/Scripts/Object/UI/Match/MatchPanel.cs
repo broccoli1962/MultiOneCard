@@ -11,17 +11,10 @@ namespace Backend.Object.UI
 {
     /// <summary>
     /// 더미 매치 테이블 View. 표시와 입력만 담당한다.
-    /// 카드 확정은 <see cref="GamePointer"/> 가 맡고, 손패는 <see cref="HandLayout"/> 이 깐다.
+    /// 카드 확정은 <see cref="GamePointer"/> 가 맡고, 7·Q·K·미러 시트는 <see cref="ChoiceSheet"/> 다.
     /// </summary>
     public sealed class MatchPanel : UIPanel<MatchPresenter>, IPointerClickHandler
     {
-        private static readonly string[] SuitCodes =
-        {
-            SuitCode.Spade, SuitCode.Heart, SuitCode.Diamond, SuitCode.Club, SuitCode.Star, SuitCode.Moon,
-        };
-
-        private static readonly string[] SuitLabels = { "S", "H", "D", "C", "R", "M" };
-
         [SerializeField] private Font _font;
         [SerializeField] private Text _hudText;
         [SerializeField] private Text _statusText;
@@ -35,18 +28,10 @@ namespace Backend.Object.UI
         [SerializeField] private CanvasGroup _inputGroup;
         [SerializeField] private CommonButton _drawButton;
         [SerializeField] private CommonButton _acceptButton;
-        [SerializeField] private CommonButton _confirmButton;
         [SerializeField] private CommonButton _surrenderButton;
-        [SerializeField] private GameObject _suitRow;
-        [SerializeField] private GameObject _queenRow;
-        [SerializeField] private GameObject _kingRow;
-        [SerializeField] private CommonButton _queenReverseButton;
-        [SerializeField] private CommonButton _queenGiveButton;
-        [SerializeField] private CommonButton _kingExtraButton;
-        [SerializeField] private CommonButton _kingHideButton;
+        [SerializeField] private ChoiceSheet _choiceSheet;
 
         private readonly List<CardView> _handCards = new List<CardView>();
-        private readonly CommonButton[] _suitButtons = new CommonButton[6];
         private bool _layoutReady;
         private long _deadlineMs;
         private string _hudBase = string.Empty;
@@ -59,6 +44,9 @@ namespace Backend.Object.UI
 
         /// <summary>손패 배치.</summary>
         public HandLayout HandLayout => _handLayout;
+
+        /// <summary>7·Q·K·미러·지급 선택 시트.</summary>
+        public ChoiceSheet ChoiceSheet => _choiceSheet;
 
         /// <summary>드로우 버튼.</summary>
         public event Action DrawClicked;
@@ -179,30 +167,28 @@ namespace Backend.Object.UI
 
             _drawButton = FindOrCreateActionButton("Draw", "드로우", new Vector2(0.2f, 0f), new Vector2(-80f, 300f));
             _acceptButton = FindOrCreateActionButton("Accept", "받기", new Vector2(0.4f, 0f), new Vector2(40f, 300f));
-            _confirmButton = FindOrCreateActionButton("Confirm", "확정", new Vector2(0.6f, 0f), new Vector2(160f, 300f));
             _surrenderButton = FindOrCreateActionButton("Surrender", "기권", new Vector2(0.8f, 0f), new Vector2(280f, 300f));
 
-            _suitRow = FindOrCreateRow("SuitRow", new Vector2(0f, 430f), 6, SuitLabels, i =>
+            if (_choiceSheet == null)
             {
-                _suitButtons[i] = null;
-            });
-            WireSuitRow();
+                var sheetGo = FindOrCreate("ChoiceSheet", typeof(RectTransform), typeof(ChoiceSheet));
+                _choiceSheet = sheetGo.GetComponent<ChoiceSheet>();
+            }
 
-            _queenRow = FindOrCreateChoiceRow("QueenRow", new Vector2(0f, 430f),
-                ("Reverse", "뒤집기"), ("Give", "주기"),
-                out _queenReverseButton, out _queenGiveButton);
-            _kingRow = FindOrCreateChoiceRow("KingRow", new Vector2(0f, 430f),
-                ("Extra", "한장더"), ("Hide", "숨기기"),
-                out _kingExtraButton, out _kingHideButton);
+            _choiceSheet.EnsureLayout(_font);
+            _choiceSheet.SuitClicked -= OnChoiceSuitClicked;
+            _choiceSheet.QueenModeClicked -= OnChoiceQueenClicked;
+            _choiceSheet.KingModeClicked -= OnChoiceKingClicked;
+            _choiceSheet.ConfirmClicked -= OnChoiceConfirmClicked;
+            _choiceSheet.SuitClicked += OnChoiceSuitClicked;
+            _choiceSheet.QueenModeClicked += OnChoiceQueenClicked;
+            _choiceSheet.KingModeClicked += OnChoiceKingClicked;
+            _choiceSheet.ConfirmClicked += OnChoiceConfirmClicked;
 
             BindButton(_drawButton, () => DrawClicked?.Invoke());
             BindButton(_acceptButton, () => AcceptClicked?.Invoke());
-            BindButton(_confirmButton, () => ConfirmClicked?.Invoke());
             BindButton(_surrenderButton, () => SurrenderClicked?.Invoke());
-            BindButton(_queenReverseButton, () => QueenModeClicked?.Invoke(QueenModeName.Reverse));
-            BindButton(_queenGiveButton, () => QueenModeClicked?.Invoke(QueenModeName.Give));
-            BindButton(_kingExtraButton, () => KingModeClicked?.Invoke(KingModeName.Extra));
-            BindButton(_kingHideButton, () => KingModeClicked?.Invoke(KingModeName.Hide));
+            HideLegacyChoiceRows();
 
             ShowPrompt(MatchPrompt.None);
             _layoutReady = true;
@@ -252,7 +238,6 @@ namespace Backend.Object.UI
             RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
             ShowPrompt(prompt);
             SetAcceptLabel(match, prompt);
-            SetConfirmVisible(prompt == MatchPrompt.GiveCards || prompt == MatchPrompt.MirrorDiscard);
             SetInputLocked(inputLocked);
         }
 
@@ -341,21 +326,48 @@ namespace Backend.Object.UI
             DrawClicked?.Invoke();
         }
 
+        private void OnChoiceSuitClicked(string suit)
+        {
+            SuitClicked?.Invoke(suit);
+        }
+
+        private void OnChoiceQueenClicked(string queenMode)
+        {
+            QueenModeClicked?.Invoke(queenMode);
+        }
+
+        private void OnChoiceKingClicked(string kingMode)
+        {
+            KingModeClicked?.Invoke(kingMode);
+        }
+
+        private void OnChoiceConfirmClicked()
+        {
+            ConfirmClicked?.Invoke();
+        }
+
         private void ShowPrompt(MatchPrompt prompt)
         {
-            if (_suitRow != null)
+            if (_choiceSheet != null)
             {
-                _suitRow.SetActive(prompt == MatchPrompt.Suit);
+                _choiceSheet.Apply(prompt);
             }
+        }
 
-            if (_queenRow != null)
-            {
-                _queenRow.SetActive(prompt == MatchPrompt.QueenMode);
-            }
+        private void HideLegacyChoiceRows()
+        {
+            HideChild("SuitRow");
+            HideChild("QueenRow");
+            HideChild("KingRow");
+            HideChild("Confirm");
+        }
 
-            if (_kingRow != null)
+        private void HideChild(string name)
+        {
+            var child = CachedTransform.Find(name);
+            if (child != null)
             {
-                _kingRow.SetActive(prompt == MatchPrompt.KingMode);
+                child.gameObject.SetActive(false);
             }
         }
 
@@ -378,14 +390,6 @@ namespace Backend.Object.UI
                         label.text = $"받기 (Q×{match.queenStack})";
                     }
                 }
-            }
-        }
-
-        private void SetConfirmVisible(bool visible)
-        {
-            if (_confirmButton != null)
-            {
-                _confirmButton.CachedGameObject.SetActive(visible);
             }
         }
 
@@ -537,140 +541,6 @@ namespace Backend.Object.UI
             button.useSound = false;
             EnsureButtonLabel(go.transform, label, 30f);
             return button;
-        }
-
-        private GameObject FindOrCreateRow(string name, Vector2 pos, int count, string[] labels, Action<int> onIndex)
-        {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = new Vector2(900f, 80f);
-            var layout = go.GetComponent<HorizontalLayoutGroup>();
-            layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.spacing = 8f;
-            layout.childForceExpandWidth = true;
-
-            for (var i = 0; i < count; i++)
-            {
-                var childName = name + labels[i];
-                var child = go.transform.Find(childName);
-                GameObject childGo;
-                if (child != null)
-                {
-                    childGo = child.gameObject;
-                }
-                else
-                {
-                    childGo = new GameObject(childName, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                    childGo.transform.SetParent(go.transform, false);
-                }
-
-                childGo.GetComponent<RectTransform>().sizeDelta = new Vector2(120f, 72f);
-                if (childGo.TryGetComponent(out Image image))
-                {
-                    image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
-                }
-
-                if (!childGo.TryGetComponent(out CommonButton button))
-                {
-                    button = childGo.AddComponent<CommonButton>();
-                }
-
-                button.useSound = false;
-                EnsureButtonLabel(childGo.transform, labels[i], 28f);
-                onIndex?.Invoke(i);
-                _suitButtons[i] = button;
-            }
-
-            return go;
-        }
-
-        private GameObject FindOrCreateChoiceRow(
-            string name,
-            Vector2 pos,
-            (string id, string label) left,
-            (string id, string label) right,
-            out CommonButton leftButton,
-            out CommonButton rightButton)
-        {
-            var existing = CachedTransform.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                go.transform.SetParent(CachedTransform, false);
-            }
-
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = new Vector2(520f, 80f);
-            var layout = go.GetComponent<HorizontalLayoutGroup>();
-            layout.spacing = 16f;
-            layout.childAlignment = TextAnchor.MiddleCenter;
-
-            leftButton = FindOrCreateChildButton(go.transform, name + left.id, left.label);
-            rightButton = FindOrCreateChildButton(go.transform, name + right.id, right.label);
-            return go;
-        }
-
-        private CommonButton FindOrCreateChildButton(Transform parent, string name, string label)
-        {
-            var existing = parent.Find(name);
-            GameObject go;
-            if (existing != null)
-            {
-                go = existing.gameObject;
-            }
-            else
-            {
-                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
-                go.transform.SetParent(parent, false);
-            }
-
-            go.GetComponent<RectTransform>().sizeDelta = new Vector2(220f, 72f);
-            if (go.TryGetComponent(out Image image))
-            {
-                image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
-            }
-
-            if (!go.TryGetComponent(out CommonButton button))
-            {
-                button = go.AddComponent<CommonButton>();
-            }
-
-            button.useSound = false;
-            EnsureButtonLabel(go.transform, label, 28f);
-            return button;
-        }
-
-        private void WireSuitRow()
-        {
-            for (var i = 0; i < _suitButtons.Length; i++)
-            {
-                var suit = SuitCodes[i];
-                BindButton(_suitButtons[i], () => SuitClicked?.Invoke(suit));
-            }
         }
 
         private void EnsureButtonLabel(Transform parent, string label, float fontSize)

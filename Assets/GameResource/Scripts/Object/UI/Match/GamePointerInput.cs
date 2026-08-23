@@ -5,14 +5,26 @@ using UnityEngine.InputSystem;
 namespace Backend.Object.UI
 {
     /// <summary>
-    /// Input System 으로 Enter/Esc/우클릭/D 를 <see cref="GamePointer"/> 에 넣는다.
+    /// Input System 으로 Enter/Esc/우클릭과 문양·Q·K 단축키를 <see cref="GamePointer"/> 에 넣는다.
     /// </summary>
     public sealed class GamePointerInput : IDisposable
     {
+        private static readonly string[] HotkeyPaths =
+        {
+            "<Keyboard>/s",
+            "<Keyboard>/h",
+            "<Keyboard>/d",
+            "<Keyboard>/c",
+            "<Keyboard>/r",
+            "<Keyboard>/m",
+            "<Keyboard>/g",
+            "<Keyboard>/e",
+        };
+
         private readonly GamePointer _pointer;
         private readonly InputAction _confirm;
         private readonly InputAction _cancel;
-        private readonly InputAction _draw;
+        private readonly InputAction _hotkeys;
 
         /// <summary>
         /// 액션을 만들고 켠다.
@@ -29,15 +41,18 @@ namespace Backend.Object.UI
             _cancel.AddBinding("<Keyboard>/escape");
             _cancel.AddBinding("<Mouse>/rightButton");
 
-            _draw = new InputAction("GamePointerDraw", InputActionType.Button);
-            _draw.AddBinding("<Keyboard>/d");
+            _hotkeys = new InputAction("GamePointerHotkeys", InputActionType.Button);
+            for (var i = 0; i < HotkeyPaths.Length; i++)
+            {
+                _hotkeys.AddBinding(HotkeyPaths[i]);
+            }
 
             _confirm.performed += OnConfirm;
             _cancel.performed += OnCancel;
-            _draw.performed += OnDraw;
+            _hotkeys.performed += OnHotkey;
             _confirm.Enable();
             _cancel.Enable();
-            _draw.Enable();
+            _hotkeys.Enable();
         }
 
         /// <summary>
@@ -47,13 +62,13 @@ namespace Backend.Object.UI
         {
             _confirm.performed -= OnConfirm;
             _cancel.performed -= OnCancel;
-            _draw.performed -= OnDraw;
+            _hotkeys.performed -= OnHotkey;
             _confirm.Disable();
             _cancel.Disable();
-            _draw.Disable();
+            _hotkeys.Disable();
             _confirm.Dispose();
             _cancel.Dispose();
-            _draw.Dispose();
+            _hotkeys.Dispose();
         }
 
         private void OnConfirm(InputAction.CallbackContext _)
@@ -66,9 +81,14 @@ namespace Backend.Object.UI
             _pointer.Cancel();
         }
 
-        private void OnDraw(InputAction.CallbackContext _)
+        private void OnHotkey(InputAction.CallbackContext ctx)
         {
-            _pointer.Draw();
+            if (ctx.control == null)
+            {
+                return;
+            }
+
+            _pointer.PressHotkey(ctx.control.name);
         }
     }
 }

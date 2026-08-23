@@ -13,7 +13,6 @@ namespace Backend.Object.UI
         private const int SeatCount = 2;
         private const int DummySeed = 1;
 
-        private readonly HashSet<int> _selectedIds = new HashSet<int>();
         private readonly GamePointer _pointer = new GamePointer();
 
         private LocalLoopback _loopback;
@@ -99,6 +98,11 @@ namespace Backend.Object.UI
             UnbindPointer();
             _pointer.PlayCardRequested += OnPlayCardRequested;
             _pointer.DrawRequested += OnDrawRequested;
+            _pointer.ChooseSuitRequested += OnChooseSuitRequested;
+            _pointer.ChooseQueenModeRequested += OnChooseQueenModeRequested;
+            _pointer.ChooseKingModeRequested += OnChooseKingModeRequested;
+            _pointer.GiveCardsRequested += OnGiveCardsRequested;
+            _pointer.MirrorDiscardRequested += OnMirrorDiscardRequested;
             _pointer.SelectionChanged += OnPointerSelectionChanged;
             _pointerInput = new GamePointerInput(_pointer);
         }
@@ -107,6 +111,11 @@ namespace Backend.Object.UI
         {
             _pointer.PlayCardRequested -= OnPlayCardRequested;
             _pointer.DrawRequested -= OnDrawRequested;
+            _pointer.ChooseSuitRequested -= OnChooseSuitRequested;
+            _pointer.ChooseQueenModeRequested -= OnChooseQueenModeRequested;
+            _pointer.ChooseKingModeRequested -= OnChooseKingModeRequested;
+            _pointer.GiveCardsRequested -= OnGiveCardsRequested;
+            _pointer.MirrorDiscardRequested -= OnMirrorDiscardRequested;
             _pointer.SelectionChanged -= OnPointerSelectionChanged;
             if (_pointerInput != null)
             {
@@ -114,7 +123,8 @@ namespace Backend.Object.UI
                 _pointerInput = null;
             }
 
-            _pointer.ClearSelection();
+            _pointer.SetSheet(GamePointerSheet.None);
+            _pointer.ClearAllSelections();
             _pointer.SetLocked(false);
             _pointer.SetPlayEnabled(true);
         }
@@ -137,8 +147,8 @@ namespace Backend.Object.UI
             _status = "준비";
             _result = null;
             _selectedPlayId = -1;
-            _selectedIds.Clear();
-            _pointer.ClearSelection();
+            _pointer.SetSheet(GamePointerSheet.None);
+            _pointer.ClearAllSelections();
             _surrenderArmed = false;
             _lastSentOp = null;
             _lastPlayedDefId = null;
@@ -234,15 +244,23 @@ namespace Backend.Object.UI
             {
                 SyncViewSeat();
                 var hand = ActiveClient()?.HandInstanceIds;
-                _prompt = hand != null && hand.Count > ev.count
-                    ? MatchPrompt.MirrorDiscard
-                    : MatchPrompt.None;
+                if (hand != null && hand.Count > ev.count)
+                {
+                    _prompt = MatchPrompt.MirrorDiscard;
+                    _status = "버릴 장";
+                }
+                else
+                {
+                    _prompt = MatchPrompt.None;
+                }
+
                 return;
             }
 
             if (_lastSentOp == OpCode.AcceptQueen && ev.ev == EvCode.TurnChanged)
             {
                 _prompt = MatchPrompt.GiveCards;
+                _status = "지급할 장";
                 return;
             }
 
@@ -251,18 +269,21 @@ namespace Backend.Object.UI
                 if (EndsWithRank(_lastPlayedDefId, '7'))
                 {
                     _prompt = MatchPrompt.Suit;
+                    _status = "무늬 고르기";
                     return;
                 }
 
                 if (EndsWithRank(_lastPlayedDefId, 'Q'))
                 {
                     _prompt = MatchPrompt.QueenMode;
+                    _status = "Q 고르기";
                     return;
                 }
 
                 if (EndsWithRank(_lastPlayedDefId, 'K'))
                 {
                     _prompt = MatchPrompt.KingMode;
+                    _status = "K 고르기";
                     return;
                 }
 
@@ -299,7 +320,7 @@ namespace Backend.Object.UI
                     _prompt = MatchPrompt.MirrorDiscard;
                     break;
                 default:
-                    _selectedIds.Clear();
+                    _pointer.ClearAllSelections();
                     break;
             }
         }
@@ -312,17 +333,6 @@ namespace Backend.Object.UI
             }
 
             _surrenderArmed = false;
-            if (_prompt == MatchPrompt.GiveCards || _prompt == MatchPrompt.MirrorDiscard)
-            {
-                if (!_selectedIds.Add(instanceId))
-                {
-                    _selectedIds.Remove(instanceId);
-                }
-
-                Refresh();
-                return;
-            }
-
             if (_prompt == MatchPrompt.HideUnder)
             {
                 if (_selectedPlayId == instanceId)
@@ -337,12 +347,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (_prompt != MatchPrompt.None)
-            {
-                return;
-            }
-
-            if (_pointer.SelectedInstanceId != instanceId)
+            if (_prompt == MatchPrompt.None && _pointer.SelectedInstanceId != instanceId)
             {
                 _status = "다시 눌러 내기";
             }
@@ -410,19 +415,7 @@ namespace Backend.Object.UI
             }
 
             _surrenderArmed = false;
-            var ids = ToArray(_selectedIds);
-            if (_prompt == MatchPrompt.GiveCards)
-            {
-                Send(ActiveClient(), OpCode.GiveCards, () => ActiveClient().GiveCards(ids));
-                _selectedIds.Clear();
-                return;
-            }
-
-            if (_prompt == MatchPrompt.MirrorDiscard)
-            {
-                Send(ActiveClient(), OpCode.MirrorDiscard, () => ActiveClient().MirrorDiscard(ids));
-                _selectedIds.Clear();
-            }
+            _pointer.Confirm();
         }
 
         private void OnSurrenderClicked()
@@ -446,32 +439,45 @@ namespace Backend.Object.UI
 
         private void OnSuitClicked(string suit)
         {
-            if (IsLocked())
-            {
-                return;
-            }
-
-            Send(ActiveClient(), OpCode.ChooseSuit, () => ActiveClient().ChooseSuit(suit));
+            _surrenderArmed = false;
+            _pointer.TapSuit(suit);
         }
 
         private void OnQueenModeClicked(string queenMode)
         {
-            if (IsLocked())
-            {
-                return;
-            }
-
-            Send(ActiveClient(), OpCode.ChooseQueenMode, () => ActiveClient().ChooseQueenMode(queenMode));
+            _surrenderArmed = false;
+            _pointer.TapQueenMode(queenMode);
         }
 
         private void OnKingModeClicked(string kingMode)
         {
-            if (IsLocked())
-            {
-                return;
-            }
+            _surrenderArmed = false;
+            _pointer.TapKingMode(kingMode);
+        }
 
+        private void OnChooseSuitRequested(string suit)
+        {
+            Send(ActiveClient(), OpCode.ChooseSuit, () => ActiveClient().ChooseSuit(suit));
+        }
+
+        private void OnChooseQueenModeRequested(string queenMode)
+        {
+            Send(ActiveClient(), OpCode.ChooseQueenMode, () => ActiveClient().ChooseQueenMode(queenMode));
+        }
+
+        private void OnChooseKingModeRequested(string kingMode)
+        {
             Send(ActiveClient(), OpCode.ChooseKingMode, () => ActiveClient().ChooseKingMode(kingMode));
+        }
+
+        private void OnGiveCardsRequested(int[] ids)
+        {
+            Send(ActiveClient(), OpCode.GiveCards, () => ActiveClient().GiveCards(ids));
+        }
+
+        private void OnMirrorDiscardRequested(int[] ids)
+        {
+            Send(ActiveClient(), OpCode.MirrorDiscard, () => ActiveClient().MirrorDiscard(ids));
         }
 
         private void Send(NetClient client, string op, System.Action send)
@@ -512,11 +518,15 @@ namespace Backend.Object.UI
             var client = ActiveClient();
             var match = client != null ? client.PublicMatch : AnyPublicMatch();
             var selected = _prompt == MatchPrompt.GiveCards || _prompt == MatchPrompt.MirrorDiscard
-                ? _selectedIds
+                ? _pointer.MultiSelectedIds
                 : PlaySelection();
             var locked = IsLocked();
+            _pointer.SetSheet(ToSheet(_prompt));
             _pointer.SetLocked(locked);
-            _pointer.SetPlayEnabled(_prompt == MatchPrompt.None && !locked);
+            if (_prompt == MatchPrompt.None || _prompt == MatchPrompt.HideUnder)
+            {
+                _pointer.SetPlayEnabled(_prompt == MatchPrompt.None && !locked);
+            }
 
             View.Render(
                 match,
@@ -602,11 +612,23 @@ namespace Backend.Object.UI
             View.ReleaseHand();
         }
 
-        private static int[] ToArray(HashSet<int> ids)
+        private static GamePointerSheet ToSheet(MatchPrompt prompt)
         {
-            var arr = new int[ids.Count];
-            ids.CopyTo(arr);
-            return arr;
+            switch (prompt)
+            {
+                case MatchPrompt.Suit:
+                    return GamePointerSheet.Suit;
+                case MatchPrompt.QueenMode:
+                    return GamePointerSheet.QueenMode;
+                case MatchPrompt.KingMode:
+                    return GamePointerSheet.KingMode;
+                case MatchPrompt.GiveCards:
+                    return GamePointerSheet.GiveCards;
+                case MatchPrompt.MirrorDiscard:
+                    return GamePointerSheet.MirrorDiscard;
+                default:
+                    return GamePointerSheet.None;
+            }
         }
 
         private static bool EndsWithRank(string defId, char rank)
