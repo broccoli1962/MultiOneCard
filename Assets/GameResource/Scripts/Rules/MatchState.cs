@@ -107,6 +107,18 @@ namespace Game.Rules
 
         public int QueenStack { get; set; }
 
+        /// <summary>즉시 1위 좌석. 없으면 null. Official 은 잔여 순위전 없음.</summary>
+        public int? WinnerSeat { get; set; }
+
+        /// <summary>이번 턴에 드로우를 했는지. DrawAndPlay 허용 판정용.</summary>
+        public bool DrewThisTurn { get; set; }
+
+        /// <summary>이번 턴에 드로우한 장. DrawAndPlay 면 이 장만 같은 턴에 낼 수 있다.</summary>
+        public int? DrawnInstanceId { get; set; }
+
+        /// <summary>첫 1위가 났고 Official처럼 잔여 순위전을 하지 않으면 true.</summary>
+        public bool IsMatchOver => WinnerSeat.HasValue && !Rules.ContinueAfterFirstWin;
+
         /// <summary>버림 top. 배분 직후 항상 1장.</summary>
         public CardInstance DiscardTop => Discard[Discard.Count - 1];
 
@@ -200,6 +212,22 @@ namespace Game.Rules
             }
 
             EnsureInvariant();
+            return true;
+        }
+
+        /// <summary>
+        /// 덱에서 1장을 뽑는다. 비었으면 RecycleDiscard 후 재시도.
+        /// 그래도 없으면 false (DeckExhausted).
+        /// </summary>
+        public bool TryDrawFromDeck(out CardInstance card)
+        {
+            if (Deck.Count == 0 && !RecycleDiscard())
+            {
+                card = default;
+                return false;
+            }
+
+            card = Deck.Dequeue();
             return true;
         }
 
