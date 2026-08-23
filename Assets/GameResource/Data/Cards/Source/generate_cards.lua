@@ -828,75 +828,296 @@ local function fillEllipseClipped(img, cx, cy, rx, ry, col, clipR)
   end
 end
 
-local function drawCrescentMoon(img, body, shadeCol, clipR)
-  local mx, my, mr = 168, 274, 80
-  local sx, sy, sr = 204, 252, 70
-  local mrsq, srsq = mr * mr, sr * sr
+local function grimPal(kind)
+  if kind == "COLOR" then
+    return {
+      body = C(236, 86, 92),
+      mid = C(176, 40, 48),
+      shade = C(112, 18, 24),
+      deep = C(48, 8, 12),
+      ink = C(20, 4, 6),
+      eye = C(255, 228, 228),
+      tooth = C(248, 220, 214),
+      gum = C(28, 6, 8),
+    }
+  end
+  if kind == "MOON" then
+    return {
+      body = C(198, 220, 248),
+      mid = C(92, 132, 196),
+      shade = C(40, 68, 128),
+      deep = C(16, 28, 64),
+      ink = C(8, 12, 28),
+      eye = C(236, 244, 255),
+      tooth = C(220, 232, 248),
+      gum = C(10, 16, 36),
+    }
+  end
+  return {
+    body = C(236, 236, 242),
+    mid = C(168, 168, 178),
+    shade = C(96, 96, 106),
+    deep = C(32, 32, 38),
+    ink = C(10, 10, 14),
+    eye = C(250, 250, 252),
+    tooth = C(236, 236, 240),
+    gum = C(16, 16, 20),
+  }
+end
+
+local function faceEdgeX(y)
+  local y0, y1 = 188, 362
+  if y < y0 or y > y1 then
+    return -9999
+  end
+  local t = (y - y0) / (y1 - y0)
+  local x
+  if t < 0.09 then
+    x = 186 + t * 140
+  elseif t < 0.20 then
+    x = 198 - (t - 0.09) * 70
+  elseif t < 0.34 then
+    x = 190
+  elseif t < 0.49 then
+    local u = (t - 0.34) / 0.15
+    x = 190 + math.sin(u * math.pi) * 42
+    if u > 0.72 then
+      x = x + math.floor((u - 0.72) * 18)
+    end
+  elseif t < 0.55 then
+    x = 176
+  elseif t < 0.78 then
+    local u = (t - 0.55) / 0.23
+    x = 184 + math.sin(u * math.pi) * 26
+  elseif t < 0.87 then
+    local u = (t - 0.78) / 0.09
+    x = 200 - math.sin(u * math.pi) * 20
+    if u > 0.35 and u < 0.7 then
+      x = x - 6
+    end
+  else
+    local u = (t - 0.87) / 0.13
+    x = 202 + u * 20
+  end
+  return math.floor(x)
+end
+
+local function inMouth(x, y)
+  if y < 294 or y > 338 then
+    return false
+  end
+  local edge = faceEdgeX(y)
+  local t = (y - 294) / 44
+  local mid = 1 - math.abs(t - 0.5) * 2
+  local right = edge - 2
+  local left = right - (12 + math.floor(mid * 22))
+  return x >= left and x <= right and x >= 142
+end
+
+local function inGrimMoon(x, y)
+  local mx, my, mr = 160, 276, 90
+  local dx, dy = x - mx, y - my
+  if dx * dx + dy * dy > mr * mr then
+    return false
+  end
+  if x > faceEdgeX(y) then
+    return false
+  end
+  if inMouth(x, y) then
+    return false
+  end
+  return true
+end
+
+local function hatchDot(x, y)
+  return ((x * 3 + y * 5) % 7) == 0 or ((x + y * 2) % 11) == 0
+end
+
+local function drawCrater(img, cx, cy, r, pal, clipR)
+  for y = cy - r, cy + r do
+    for x = cx - r, cx + r do
+      local dx, dy = x - cx, y - cy
+      local d2 = dx * dx + dy * dy
+      if d2 <= r * r and inGrimMoon(x, y) then
+        local t = math.sqrt(d2) / r
+        local col = pal.shade
+        if t < 0.45 then
+          col = pal.deep
+        elseif t > 0.78 then
+          col = pal.mid
+        end
+        if hatchDot(x, y) then
+          col = pal.ink
+        end
+        putInCircle(img, x, y, col, clipR)
+      end
+    end
+  end
+end
+
+local function drawCrack(img, x0, y0, x1, y1, pal, clipR)
+  local n = math.max(8, math.floor(math.abs(x1 - x0) + math.abs(y1 - y0)))
+  local jx, jy = 0, 0
+  for i = 0, n do
+    local u = i / n
+    jx = jx + ((i * 17) % 5) - 2
+    jy = jy + ((i * 13) % 5) - 2
+    local x = math.floor(x0 + (x1 - x0) * u + jx * 0.15)
+    local y = math.floor(y0 + (y1 - y0) * u + jy * 0.15)
+    if inGrimMoon(x, y) or inMouth(x, y) then
+      putInCircle(img, x, y, pal.ink, clipR)
+      putInCircle(img, x + 1, y, pal.deep, clipR)
+    end
+  end
+end
+
+local function drawGrimMoon(img, kind, clipR)
+  local pal = grimPal(kind)
+  local mx, my, mr = 160, 276, 90
   for y = my - mr, my + mr do
     for x = mx - mr, mx + mr do
-      local dx, dy = x - mx, y - my
-      if dx * dx + dy * dy <= mrsq then
-        local dx2, dy2 = x - sx, y - sy
-        if dx2 * dx2 + dy2 * dy2 > srsq then
-          local t = (x - (mx - mr)) / (mr * 2)
-          local u = (y - (my - mr)) / (mr * 2)
-          local col = body
-          if t < 0.28 then
-            col = shadeCol
-          elseif t > 0.72 and u < 0.45 then
-            col = lerpCol(body, WHITE, 0.22)
-          end
-          putInCircle(img, x, y, col, clipR)
+      if inMainCircle(x, y, clipR) and inGrimMoon(x, y) then
+        local t = (x - (mx - mr)) / (mr * 2)
+        local u = (y - (my - mr)) / (mr * 2)
+        local col = pal.body
+        if t < 0.22 then
+          col = pal.shade
+        elseif t < 0.40 then
+          col = pal.mid
+        elseif t > 0.72 and u < 0.42 then
+          col = lerpCol(pal.body, pal.eye, 0.35)
+        end
+        if hatchDot(x, y) and t < 0.55 then
+          col = (t < 0.28) and pal.deep or pal.shade
+        end
+        if (x + y * 3) % 13 == 0 and t < 0.5 then
+          col = pal.ink
+        end
+        putInCircle(img, x, y, col, clipR)
+      end
+    end
+  end
+
+  for y = my - mr, my + mr do
+    for x = mx - mr, mx + mr do
+      if inMainCircle(x, y, clipR) and inGrimMoon(x, y) then
+        if not inGrimMoon(x + 1, y) or not inGrimMoon(x, y + 1) or not inGrimMoon(x - 1, y) then
+          putInCircle(img, x, y, pal.ink, clipR)
         end
       end
     end
   end
-  fillCircleClipped(img, 148, 292, 9, shade(shadeCol, 0.88), clipR)
-  fillCircleClipped(img, 172, 248, 6, shade(shadeCol, 0.9), clipR)
-  fillCircleClipped(img, 156, 262, 4, shade(shadeCol, 0.8), clipR)
-  fillCircleClipped(img, 146, 292, 3, lerpCol(shadeCol, body, 0.4), clipR)
-end
 
-local function drawMoonFace(img, eyeWhite, pupil, mouth, clipR)
-  fillEllipseClipped(img, 154, 246, 7, 6, shade(pupil, 1.8), clipR)
-  fillEllipseClipped(img, 150, 276, 6, 5, shade(pupil, 1.8), clipR)
-  fillEllipseClipped(img, 156, 248, 9, 11, eyeWhite, clipR)
-  fillEllipseClipped(img, 152, 278, 8, 10, eyeWhite, clipR)
-  fillCircleClipped(img, 158, 250, 4, pupil, clipR)
-  fillCircleClipped(img, 154, 280, 3, pupil, clipR)
-  putInCircle(img, 160, 247, WHITE, clipR)
-  putInCircle(img, 156, 277, WHITE, clipR)
-  for i = -6, 6 do
-    putInCircle(img, 154 + i, 238, shade(pupil, 1.4), clipR)
-    putInCircle(img, 150 + i, 268, shade(pupil, 1.4), clipR)
-  end
-  fillEllipseClipped(img, 168, 268, 4, 5, shade(pupil, 1.6), clipR)
-  for i = 0, 26 do
-    local t = i / 26
-    local x = 146 + math.floor(t * 32)
-    local y = 300 + math.floor(math.sin(t * math.pi) * 9)
-    putInCircle(img, x, y, mouth, clipR)
-    putInCircle(img, x, y + 1, mouth, clipR)
-    putInCircle(img, x, y + 2, shade(mouth, 0.7), clipR)
-  end
-end
-
-local function drawBlood(img, clipR)
-  fillEllipseClipped(img, 174, 308, 8, 5, BLOOD, clipR)
-  for i = 0, 58 do
-    local x = 174 + math.floor(math.sin(i * 0.18) * 2 + i * 0.16)
-    local y = 308 + i
-    local r = (i < 10) and 4 or (i < 30 and 5 or (i < 46 and 4 or 3))
-    fillCircleClipped(img, x, y, r, (i % 6 == 0) and BLOOD_DARK or BLOOD, clipR)
-    if i % 11 == 0 then
-      fillCircleClipped(img, x + 5, y + 2, 2, BLOOD_LIGHT, clipR)
+  for y = 294, 338 do
+    for x = 140, 230 do
+      if inMouth(x, y) then
+        putInCircle(img, x, y, pal.gum, clipR)
+      end
     end
   end
-  fillCircleClipped(img, 178, 326, 7, BLOOD, clipR)
-  fillCircleClipped(img, 182, 348, 6, BLOOD_DARK, clipR)
-  fillCircleClipped(img, 186, 366, 5, BLOOD, clipR)
-  fillCircleClipped(img, 188, 380, 3, BLOOD_LIGHT, clipR)
-  fillEllipseClipped(img, 170, 312, 8, 4, BLOOD_LIGHT, clipR)
+
+  local teeth = {
+    { 156, 300, 8, 10 }, { 166, 298, 8, 11 }, { 176, 300, 8, 10 },
+    { 186, 304, 7, 9 }, { 194, 310, 6, 8 },
+    { 158, 318, 8, 10 }, { 168, 320, 8, 9 }, { 178, 322, 7, 8 },
+    { 187, 326, 6, 7 },
+  }
+  for i = 1, #teeth do
+    local tx, ty, tw, th = teeth[i][1], teeth[i][2], teeth[i][3], teeth[i][4]
+    for yy = ty, ty + th - 1 do
+      for xx = tx, tx + tw - 1 do
+        if inMouth(xx, yy) then
+          local col = pal.tooth
+          if xx == tx or yy == ty then
+            col = lerpCol(pal.tooth, pal.body, 0.3)
+          end
+          if xx == tx + tw - 1 or yy == ty + th - 1 then
+            col = pal.mid
+          end
+          putInCircle(img, xx, yy, col, clipR)
+        end
+      end
+    end
+  end
+
+  local ex, ey, er = 150, 244, 16
+  fillCircleClipped(img, ex, ey, er + 3, pal.deep, clipR)
+  fillCircleClipped(img, ex, ey, er, pal.eye, clipR)
+  strokeCircle(img, ex, ey, er, 2, pal.ink)
+  fillCircleClipped(img, ex + 1, ey + 1, 3, pal.ink, clipR)
+  putInCircle(img, ex - 4, ey - 5, WHITE, clipR)
+  for a = 0, 11 do
+    local ang = a * math.pi / 6
+    local x1 = ex + math.floor(math.cos(ang) * (er + 2))
+    local y1 = ey + math.floor(math.sin(ang) * (er + 2))
+    local x2 = ex + math.floor(math.cos(ang) * (er + 14 + a % 3))
+    local y2 = ey + math.floor(math.sin(ang) * (er + 14 + a % 3))
+    drawCrack(img, x1, y1, x2, y2, pal, clipR)
+  end
+
+  fillPoly(img, {
+    { 172, 250 }, { 224, 266 }, { 218, 274 }, { 170, 278 },
+  }, pal.mid)
+  fillPoly(img, {
+    { 176, 252 }, { 216, 266 }, { 170, 270 },
+  }, pal.body)
+  fillPoly(img, {
+    { 216, 268 }, { 226, 272 }, { 214, 278 },
+  }, pal.shade)
+  for i = 0, 10 do
+    putInCircle(img, 176 + i * 4, 254 + math.floor(i * 1.2), pal.ink, clipR)
+  end
+  putInCircle(img, 214, 272, pal.deep, clipR)
+  putInCircle(img, 216, 274, pal.ink, clipR)
+
+  drawCrater(img, 138, 298, 9, pal, clipR)
+  drawCrater(img, 150, 214, 6, pal, clipR)
+  drawCrater(img, 132, 258, 5, pal, clipR)
+  drawCrater(img, 146, 332, 7, pal, clipR)
+  drawCrater(img, 168, 206, 4, pal, clipR)
+  drawCrater(img, 134, 320, 4, pal, clipR)
+  drawCrater(img, 160, 228, 3, pal, clipR)
+
+  drawCrack(img, 136, 270, 148, 310, pal, clipR)
+  drawCrack(img, 142, 330, 168, 350, pal, clipR)
+  drawCrack(img, 168, 200, 150, 226, pal, clipR)
+  drawCrack(img, 178, 286, 200, 318, pal, clipR)
+
+  if kind == "COLOR" then
+    local bx, by = 198, 318
+    for i = 0, 54 do
+      local x = bx + math.floor(math.sin(i * 0.2) * 2 + i * 0.12)
+      local y = by + i
+      local r = (i < 8) and 4 or (i < 28 and 5 or 3)
+      fillCircleClipped(img, x, y, r, (i % 5 == 0) and BLOOD_DARK or BLOOD, clipR)
+    end
+    fillCircleClipped(img, 202, 338, 6, BLOOD, clipR)
+    fillCircleClipped(img, 206, 360, 5, BLOOD_DARK, clipR)
+    fillCircleClipped(img, 208, 376, 3, BLOOD_LIGHT, clipR)
+    fillEllipseClipped(img, 196, 320, 7, 4, BLOOD_LIGHT, clipR)
+  end
+end
+
+local function drawJokerStars(img, clipR)
+  local seed = 17
+  for i = 1, 80 do
+    seed = (seed * 1103515245 + 12345) % 2147483647
+    local ang = (seed % 360) * math.pi / 180
+    seed = (seed * 1103515245 + 12345) % 2147483647
+    local dist = 8 + (seed % 108)
+    local x = CX + math.floor(math.cos(ang) * dist)
+    local y = CY + math.floor(math.sin(ang) * dist)
+    if inMainCircle(x, y, 108) and not inGrimMoon(x, y) and not inMouth(x, y) then
+      seed = (seed * 1103515245 + 12345) % 2147483647
+      local kindStar = seed % 6
+      local col = (kindStar == 0) and C(255, 232, 160) or (kindStar == 1 and C(200, 220, 255) or C(240, 246, 255))
+      if kindStar >= 4 then
+        fillStar(img, x, y, 4 + (seed % 4), 2, col)
+      else
+        fillSparkle(img, x, y, 2 + (seed % 3), col)
+      end
+    end
+  end
 end
 
 local function drawJokerCircleChrome(img, fill, ring)
@@ -915,59 +1136,23 @@ local function drawJoker(img, kind)
   local clipR = 120
   if kind == "BW" then
     drawFaceBase(img, INK_BLACK)
-    drawJokerCircleChrome(img, C(16, 16, 20), C(200, 200, 208))
-    drawCrescentMoon(img, MOON_FILL, MOON_SHADE, clipR)
-    drawMoonFace(img, C(248, 248, 252), MOON_INK, C(48, 48, 54), clipR)
+    drawJokerCircleChrome(img, C(12, 12, 16), C(200, 200, 208))
+    drawGrimMoon(img, "BW", clipR)
   elseif kind == "COLOR" then
     drawFaceBase(img, JOKER_RED)
-    drawJokerCircleChrome(img, C(42, 10, 14), C(220, 64, 72))
-    drawCrescentMoon(img, CRESCENT_RED, CRESCENT_RED_SHADE, clipR)
-    drawMoonFace(img, C(255, 220, 220), C(80, 12, 16), C(90, 10, 16), clipR)
-    drawBlood(img, clipR)
+    drawJokerCircleChrome(img, C(36, 8, 12), C(220, 64, 72))
+    drawGrimMoon(img, "COLOR", clipR)
   else
     drawFaceBase(img, JOKER_BLUE)
-    for r = 120, 16, -10 do
+    for r = 120, 16, -8 do
       local t = 1 - r / 120
-      fillCircle(img, CX, CY, r, lerpCol(C(8, 14, 40), C(28, 52, 110), t * 0.55))
+      fillCircle(img, CX, CY, r, lerpCol(C(6, 10, 32), C(24, 46, 102), t * 0.6))
     end
     strokeCircle(img, CX, CY, 120, 5, C(120, 170, 255))
     strokeCircle(img, CX, CY, 114, 2, GOLD_DIM)
-    local seed = 17
-    for i = 1, 72 do
-      seed = (seed * 1103515245 + 12345) % 2147483647
-      local ang = (seed % 360) * math.pi / 180
-      seed = (seed * 1103515245 + 12345) % 2147483647
-      local dist = 10 + (seed % 100)
-      local x = CX + math.floor(math.cos(ang) * dist)
-      local y = CY + math.floor(math.sin(ang) * dist)
-      if inMainCircle(x, y, 108) then
-        seed = (seed * 1103515245 + 12345) % 2147483647
-        local kindStar = seed % 6
-        local col = (kindStar == 0) and C(255, 232, 160) or (kindStar == 1 and C(200, 220, 255) or C(240, 246, 255))
-        if kindStar >= 4 then
-          fillStar(img, x, y, 5 + (seed % 5), 2, col)
-        else
-          fillSparkle(img, x, y, 2 + (seed % 4), col)
-        end
-      end
-    end
-    local lines = {
-      { CX - 40, CY - 30, CX - 8, CY - 48 },
-      { CX - 8, CY - 48, CX + 22, CY - 20 },
-      { CX + 22, CY - 20, CX + 8, CY + 18 },
-      { CX - 24, CY + 36, CX + 8, CY + 18 },
-    }
-    for i = 1, #lines do
-      local x0, y0, x1, y1 = lines[i][1], lines[i][2], lines[i][3], lines[i][4]
-      for t = 0, 20 do
-        local u = t / 20
-        putInCircle(img, math.floor(x0 + (x1 - x0) * u), math.floor(y0 + (y1 - y0) * u), C(160, 190, 230), clipR)
-      end
-    end
-    fillSparkle(img, CX - 36, CY - 28, 7, C(255, 248, 220))
-    fillSparkle(img, CX + 40, CY + 18, 6, WHITE)
-    fillStar(img, CX + 8, CY - 44, 10, 4, C(210, 230, 255))
-    fillStar(img, CX - 20, CY + 40, 8, 3, C(255, 236, 170))
+    drawJokerStars(img, clipR)
+    drawGrimMoon(img, "MOON", clipR)
+    drawJokerStars(img, clipR)
   end
 end
 
