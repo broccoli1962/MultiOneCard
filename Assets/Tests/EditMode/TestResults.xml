@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="30" result="Passed" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0" engine-id="unity" clr-version="Unity 6000.3.6f1" start-time="2026-08-23 10:28:22Z" end-time="2026-08-23 10:28:27Z" duration="0.8014908">
+  <test-suite type="Assembly" name="Game.Rules.EditMode.Tests" fullname="Game.Rules.EditMode.Tests" result="Passed" total="30" passed="30" failed="0" skipped="0" duration="0.8014908">
+    <properties>
+      <property name="platform" value="EditMode" />
+      <property name="job_id" value="2654dea8569d40429854824da250080f" />
+    </properties>
+    <test-suite type="TestFixture" name="OfficialRulesTests" fullname="Game.Rules.Tests.OfficialRulesTests" classname="Game.Rules.Tests.OfficialRulesTests" result="Passed" total="30" passed="30" failed="0" skipped="0" duration="0.8014908">
+      <test-case name="ApplyTimeout_Attack_TakesStack" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_Attack_TakesStack" result="Passed" duration="0.0211984" />
+      <test-case name="ApplyTimeout_Hide_HidesLowestScore" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_Hide_HidesLowestScore" result="Passed" duration="0.0038924" />
+      <test-case name="ApplyTimeout_KingMode_EndsWithoutExtra" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_KingMode_EndsWithoutExtra" result="Passed" duration="0.0005521" />
+      <test-case name="ApplyTimeout_Normal_DrawsOneAndAdvances" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_Normal_DrawsOneAndAdvances" result="Passed" duration="0.000303" />
+      <test-case name="ApplyTimeout_QueenMode_Reverses" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_QueenMode_Reverses" result="Passed" duration="0.0004764" />
+      <test-case name="ApplyTimeout_QueenResponse_StartsGive" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_QueenResponse_StartsGive" result="Passed" duration="0.0004222" />
+      <test-case name="ApplyTimeout_Seven_UsesPlayedSuit" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_Seven_UsesPlayedSuit" result="Passed" duration="0.0011389" />
+      <test-case name="ApplyTimeout_ThreeConsecutive_SurrendersWithoutDiscardingHand" fullname="Game.Rules.Tests.OfficialRulesTests.ApplyTimeout_ThreeConsecutive_SurrendersWithoutDiscardingHand" result="Passed" duration="0.0026731" />
+      <test-case name="Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(2,7)" fullname="Game.Rules.Tests.OfficialRulesTests.Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(2,7)" result="Passed" duration="0.000488" />
+      <test-case name="Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(3,7)" fullname="Game.Rules.Tests.OfficialRulesTests.Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(3,7)" result="Passed" duration="0.0000708" />
+      <test-case name="Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(4,7)" fullname="Game.Rules.Tests.OfficialRulesTests.Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(4,7)" result="Passed" duration="0.0000508" />
+      <test-case name="Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(5,5)" fullname="Game.Rules.Tests.OfficialRulesTests.Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(5,5)" result="Passed" duration="0.00005" />
+      <test-case name="Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(6,5)" fullname="Game.Rules.Tests.OfficialRulesTests.Deal_FixedSeed_KeepsNinetyOneAndOfficialHandSize(6,5)" result="Passed" duration="0.0000516" />
+      <test-case name="KingExtra_AllowsOneMoreLegalCard" fullname="Game.Rules.Tests.OfficialRulesTests.KingExtra_AllowsOneMoreLegalCard" result="Passed" duration="0.0002896" />
+      <test-case name="KingHide_ExcludesHiddenFromPublicTop" fullname="Game.Rules.Tests.OfficialRulesTests.KingHide_ExcludesHiddenFromPublicTop" result="Passed" duration="0.0016358" />
+      <test-case name="LegalMove_NormalTurn_SevenAndWildOk_PassIllegal" fullname="Game.Rules.Tests.OfficialRulesTests.LegalMove_NormalTurn_SevenAndWildOk_PassIllegal" result="Passed" duration="0.0002594" />
+      <test-case name="Pill_LocksColor_BlocksJokerAndColorless" fullname="Game.Rules.Tests.OfficialRulesTests.Pill_LocksColor_BlocksJokerAndColorless" result="Passed" duration="0.0011207" />
+      <test-case name="Pill_RepeatChangesLockColor_NoSoloFinish" fullname="Game.Rules.Tests.OfficialRulesTests.Pill_RepeatChangesLockColor_NoSoloFinish" result="Passed" duration="0.0003332" />
+      <test-case name="PlayCard_AttackResponse_RejectsNonResponse" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_AttackResponse_RejectsNonResponse" result="Passed" duration="0.0004487" />
+      <test-case name="PlayCard_LastLegalAttack_FinishesWithoutEffect" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_LastLegalAttack_FinishesWithoutEffect" result="Passed" duration="0.0004185" />
+      <test-case name="PlayCard_LastPill_DoesNotFinish" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_LastPill_DoesNotFinish" result="Passed" duration="0.0002535" />
+      <test-case name="PlayCard_NotCurrentSeat_RejectsNotYourTurn" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_NotCurrentSeat_RejectsNotYourTurn" result="Passed" duration="0.0001363" />
+      <test-case name="PlayCard_SameSuitOrRank_Accepts_MismatchRejects" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_SameSuitOrRank_Accepts_MismatchRejects" result="Passed" duration="0.0003012" />
+      <test-case name="PlayCard_Spear_BlocksThreeFour_AllowsPass" fullname="Game.Rules.Tests.OfficialRulesTests.PlayCard_Spear_BlocksThreeFour_AllowsPass" result="Passed" duration="0.0003897" />
+      <test-case name="QueenGiveChain_TransfersThenClearsStack" fullname="Game.Rules.Tests.OfficialRulesTests.QueenGiveChain_TransfersThenClearsStack" result="Passed" duration="0.0013338" />
+      <test-case name="RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(2)" fullname="Game.Rules.Tests.OfficialRulesTests.RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(2)" result="Passed" duration="0.0022301" />
+      <test-case name="RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(3)" fullname="Game.Rules.Tests.OfficialRulesTests.RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(3)" result="Passed" duration="0.0021597" />
+      <test-case name="RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(4)" fullname="Game.Rules.Tests.OfficialRulesTests.RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(4)" result="Passed" duration="0.0004755" />
+      <test-case name="RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(5)" fullname="Game.Rules.Tests.OfficialRulesTests.RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(5)" result="Passed" duration="0.0010867" />
+      <test-case name="RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(6)" fullname="Game.Rules.Tests.OfficialRulesTests.RandomPolicy_ShortSimulation_KeepsNinetyOneInvariant(6)" result="Passed" duration="0.0014186" />
+    </test-suite>
+  </test-suite>
+</test-run>

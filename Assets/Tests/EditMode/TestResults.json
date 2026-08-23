@@ -1,0 +1,13 @@
+{
+  "mode": "EditMode",
+  "assembly": "Game.Rules.EditMode.Tests",
+  "fixture": "Game.Rules.Tests.OfficialRulesTests",
+  "jobId": "2654dea8569d40429854824da250080f",
+  "resultState": "Passed",
+  "total": 30,
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "durationSeconds": 0.8014908,
+  "message": "OfficialRulesTests EditMode tests passed"
+}
