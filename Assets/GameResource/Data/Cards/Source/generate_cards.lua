@@ -369,57 +369,18 @@ local function opaqueBounds(src)
   return minx, miny, maxx, maxy
 end
 
-local function softenEdge(src)
-  local w, h = src.width, src.height
-  local dst = Image(w, h, ColorMode.RGB)
-  dst:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
-  for y = 0, h - 1 do
-    for x = 0, w - 1 do
-      local c = Color(src:getPixel(x, y))
-      if c.alpha > 8 then
-        local empty = 0
-        for oy = -2, 2 do
-          for ox = -2, 2 do
-            local nx, ny = x + ox, y + oy
-            local a = 0
-            if nx >= 0 and ny >= 0 and nx < w and ny < h then
-              a = Color(src:getPixel(nx, ny)).alpha
-            end
-            if a < 16 then
-              empty = empty + 1
-            end
-          end
-        end
-        if empty > 0 then
-          c.alpha = clamp8(c.alpha * (1 - empty / 36))
-        end
-        dst:putPixel(x, y, c)
-      end
-    end
-  end
-  return dst
-end
-
-local function fitKeyed(name, maxW, maxH, method, soften)
+local function fitKeyed(name, maxW, maxH, method)
   method = method or "bilinear"
-  local key = "fit:" .. method .. ":" .. tostring(soften) .. ":" .. name .. ":" .. maxW .. "x" .. maxH
+  local key = "fit:" .. method .. ":" .. name .. ":" .. maxW .. "x" .. maxH
   if sizedCache[key] then
     return sizedCache[key]
   end
   local src = keyed(name)
   local x0, y0, x1, y1 = opaqueBounds(src)
-  local pad = soften and 3 or 0
-  x0 = math.max(0, x0 - pad)
-  y0 = math.max(0, y0 - pad)
-  x1 = math.min(src.width - 1, x1 + pad)
-  y1 = math.min(src.height - 1, y1 + pad)
   local cw, ch = x1 - x0 + 1, y1 - y0 + 1
   local crop = Image(cw, ch, ColorMode.RGB)
   crop:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
   crop:drawImage(src, Point(-x0, -y0))
-  if soften then
-    crop = softenEdge(crop)
-  end
   local scale = math.min(maxW / cw, maxH / ch)
   local nw = math.max(1, math.floor(cw * scale + 0.5))
   local nh = math.max(1, math.floor(ch * scale + 0.5))
@@ -436,86 +397,6 @@ end
 
 local function blitCentered(dst, src, cx, cy)
   blit(dst, src, math.floor(cx - src.width * 0.5), math.floor(cy - src.height * 0.5))
-end
-
-local function fadeOutline(src, radius)
-  local w, h = src.width, src.height
-  local inf = radius + 1
-  local d = {}
-  for y = 0, h - 1 do
-    for x = 0, w - 1 do
-      local empty = Color(src:getPixel(x, y)).alpha < 16
-        or x == 0 or y == 0 or x == w - 1 or y == h - 1
-      d[y * w + x + 1] = empty and 0 or inf
-    end
-  end
-  for y = 0, h - 1 do
-    for x = 0, w - 1 do
-      local i = y * w + x + 1
-      if x > 0 then
-        d[i] = math.min(d[i], d[i - 1] + 1)
-      end
-      if y > 0 then
-        d[i] = math.min(d[i], d[i - w] + 1)
-      end
-    end
-  end
-  for y = h - 1, 0, -1 do
-    for x = w - 1, 0, -1 do
-      local i = y * w + x + 1
-      if x < w - 1 then
-        d[i] = math.min(d[i], d[i + 1] + 1)
-      end
-      if y < h - 1 then
-        d[i] = math.min(d[i], d[i + w] + 1)
-      end
-    end
-  end
-  local dst = Image(w, h, ColorMode.RGB)
-  dst:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
-  for y = 0, h - 1 do
-    for x = 0, w - 1 do
-      local c = Color(src:getPixel(x, y))
-      if c.alpha > 8 then
-        local t = d[y * w + x + 1] / radius
-        if t < 1 then
-          if t < 0 then
-            t = 0
-          end
-          t = t * t * (3 - 2 * t)
-          c.alpha = clamp8(c.alpha * t)
-        end
-        dst:putPixel(x, y, c)
-      end
-    end
-  end
-  return dst
-end
-
-local function fitFade(name, maxW, maxH)
-  local key = "fade:" .. name .. ":" .. maxW .. "x" .. maxH
-  if sizedCache[key] then
-    return sizedCache[key]
-  end
-  local src = keyed(name)
-  local x0, y0, x1, y1 = opaqueBounds(src)
-  local pad = 20
-  x0 = math.max(0, x0 - pad)
-  y0 = math.max(0, y0 - pad)
-  x1 = math.min(src.width - 1, x1 + pad)
-  y1 = math.min(src.height - 1, y1 + pad)
-  local crop = Image(x1 - x0 + 1, y1 - y0 + 1, ColorMode.RGB)
-  crop:clear(Color{ r = 0, g = 0, b = 0, a = 0 })
-  crop:drawImage(src, Point(-x0, -y0))
-  local scale = math.min(maxW / crop.width, maxH / crop.height)
-  local nw = math.max(1, math.floor(crop.width * scale + 0.5))
-  local nh = math.max(1, math.floor(crop.height * scale + 0.5))
-  if nw ~= crop.width or nh ~= crop.height then
-    crop:resize{ size = Size(nw, nh), method = "bilinear" }
-  end
-  crop = fadeOutline(crop, 28)
-  sizedCache[key] = crop
-  return crop
 end
 
 local function isNearCream(c)
@@ -776,7 +657,7 @@ local function drawJoker(kind)
 end
 
 local function drawSpecial(id)
-  local file, caption, maxW, maxH, cy, method, soften
+  local file, caption, maxW, maxH, cy, method
   if id == "SPEC:SPEAR" then
     file, caption, maxW, maxH, cy = "spec_spear.png", "SPEAR", 420, 700, 500
   elseif id == "SPEC:PASS" then
@@ -784,7 +665,7 @@ local function drawSpecial(id)
   elseif id == "SPEC:REVJOKER" then
     file, caption, maxW, maxH, cy = "spec_rev.png", "RE", 520, 520, 500
   elseif id == "SPEC:COUNTER" then
-    file, caption, maxW, maxH, cy = "spec_counter.png", "CTR", 560, 680, 500
+    file, caption, maxW, maxH, cy, method = "spec_counter.png", "CTR", 540, 640, 500, "nearest"
   elseif id == "SPEC:MIRROR" then
     file, caption, maxW, maxH, cy = "spec_mirror.png", "MIRROR", 480, 640, 500
   elseif id == "SPEC:PILL_BK" then
@@ -795,11 +676,8 @@ local function drawSpecial(id)
     file, caption, maxW, maxH, cy = "spec_pill_bl.png", "PILL", 520, 240, 500
   end
   local img = newWildFace()
-  if id == "SPEC:COUNTER" then
-    blitCentered(img, fitFade(file, maxW, maxH), CX, cy)
-  else
-    blitCentered(img, fitKeyed(file, maxW, maxH, method, soften), CX, cy)
-  end
+  blitCentered(img, fitKeyed(file, maxW, maxH, method), CX, cy)
+
   drawCaptionRainbow(img, caption)
   return img
 end
