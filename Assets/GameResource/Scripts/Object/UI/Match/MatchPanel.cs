@@ -32,7 +32,17 @@ namespace Backend.Object.UI
         [SerializeField] private ChoiceSheet _choiceSheet;
 
         private readonly List<CardView> _handCards = new List<CardView>();
+        private readonly CardView[] _opponentViews = new CardView[5];
+        private readonly SeatAnchor[] _seatScratch = new SeatAnchor[5];
         private bool _layoutReady;
+        private int _seatCount = 2;
+        private int _viewingSeat;
+        private int _fitWidth;
+        private int _fitHeight;
+        private float _fitSafeX;
+        private float _fitSafeY;
+        private float _fitSafeW;
+        private float _fitSafeH;
 
         /// <summary>손패 풀용 템플릿.</summary>
         public CardView CardPrefab => _cardPrefab;
@@ -93,6 +103,19 @@ namespace Backend.Object.UI
             {
                 _matchHud.Tick();
             }
+
+            if (_layoutReady && NeedsSafeRefit())
+            {
+                ApplySafeLayout();
+            }
+        }
+
+        private void OnRectTransformDimensionsChange()
+        {
+            if (_layoutReady)
+            {
+                ApplySafeLayout();
+            }
         }
 
         /// <summary>
@@ -137,7 +160,7 @@ namespace Backend.Object.UI
             _statusText = FindOrCreateText("Status", new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(1000f, 56f), 28f);
             _resultText = FindOrCreateText("Result", new Vector2(0.5f, 0.55f), new Vector2(0f, 80f), new Vector2(900f, 220f), 36f);
 
-            _opponentView = FindOrCreateCard("OpponentCard", new Vector2(0.5f, 1f), new Vector2(0f, -360f), new Vector2(140f, 196f));
+            EnsureOpponentViews();
             _discardView = FindOrCreateCard("DiscardTop", new Vector2(0.5f, 0.55f), new Vector2(0f, 40f), new Vector2(160f, 224f));
             _deckView = FindOrCreateCard("Deck", new Vector2(0.5f, 0.55f), new Vector2(-220f, 40f), new Vector2(140f, 196f));
             _deckView.Clicked -= OnDeckClicked;
@@ -157,7 +180,6 @@ namespace Backend.Object.UI
             {
                 var handGo = FindOrCreate("Hand", typeof(RectTransform));
                 _handContainer = handGo.GetComponent<RectTransform>();
-                StretchBottom(_handContainer, 260f, 20f);
                 if (handGo.TryGetComponent(out HorizontalLayoutGroup group))
                 {
                     group.enabled = false;
@@ -203,6 +225,7 @@ namespace Backend.Object.UI
 
             ShowPrompt(MatchPrompt.None);
             _layoutReady = true;
+            ApplySafeLayout();
         }
 
         /// <summary>
@@ -221,6 +244,16 @@ namespace Backend.Object.UI
             bool inputLocked)
         {
             EnsureLayout();
+            _viewingSeat = viewingSeat;
+            _seatCount = match != null && match.handCounts != null && match.handCounts.Length >= 2
+                ? match.handCounts.Length
+                : 2;
+            if (_seatCount > 6)
+            {
+                _seatCount = 6;
+            }
+
+            ApplySafeLayout();
 
             if (_matchHud != null)
             {
@@ -240,11 +273,7 @@ namespace Backend.Object.UI
                     _deckView.SetInteractable(!inputLocked && prompt == MatchPrompt.None);
                 }
 
-                var opponentSeat = viewingSeat == 0 ? 1 : 0;
-                var opponentCount = match.handCounts != null && opponentSeat < match.handCounts.Length
-                    ? match.handCounts[opponentSeat]
-                    : 0;
-                _opponentView.BindBack(opponentCount);
+                BindOpponents(match, viewingSeat);
             }
 
             RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
@@ -570,13 +599,223 @@ namespace Backend.Object.UI
             return go;
         }
 
-        private static void StretchBottom(RectTransform rt, float height, float bottom)
+        private void EnsureOpponentViews()
         {
-            rt.anchorMin = new Vector2(0f, 0f);
-            rt.anchorMax = new Vector2(1f, 0f);
+            for (var i = 0; i < _opponentViews.Length; i++)
+            {
+                var name = i == 0 ? "OpponentCard" : "Opponent" + i;
+                _opponentViews[i] = FindOrCreateCard(name, new Vector2(0.5f, 1f), new Vector2(0f, -360f), new Vector2(140f, 196f));
+            }
+
+            _opponentView = _opponentViews[0];
+        }
+
+        private void BindOpponents(PublicMatchView match, int viewingSeat)
+        {
+            var placed = LayoutPresetUtil.PlaceOpponents(_seatCount, viewingSeat, _seatScratch);
+            for (var i = 0; i < _opponentViews.Length; i++)
+            {
+                var view = _opponentViews[i];
+                if (view == null)
+                {
+                    continue;
+                }
+
+                var show = i < placed;
+                view.CachedGameObject.SetActive(show);
+                if (!show)
+                {
+                    continue;
+                }
+
+                var seat = _seatScratch[i].Seat;
+                var count = match.handCounts != null && seat >= 0 && seat < match.handCounts.Length
+                    ? match.handCounts[seat]
+                    : 0;
+                view.BindBack(count);
+            }
+        }
+
+        private bool NeedsSafeRefit()
+        {
+            var safe = Screen.safeArea;
+            return _fitWidth != Screen.width
+                || _fitHeight != Screen.height
+                || _fitSafeX != safe.x
+                || _fitSafeY != safe.y
+                || _fitSafeW != safe.width
+                || _fitSafeH != safe.height;
+        }
+
+        private void ApplySafeLayout()
+        {
+            var preset = LayoutPresetUtil.Resolve(Screen.width, Screen.height);
+            var safe = Screen.safeArea;
+            var fitter = new SafeAreaFitter(Screen.width, Screen.height, safe.x, safe.y, safe.width, safe.height);
+            _fitWidth = Screen.width;
+            _fitHeight = Screen.height;
+            _fitSafeX = safe.x;
+            _fitSafeY = safe.y;
+            _fitSafeW = safe.width;
+            _fitSafeH = safe.height;
+
+            var handHeight = LayoutPresetUtil.HandHeight(preset);
+            PlaceHand(fitter, handHeight);
+            PlaceHud(fitter);
+            PlaceStatus(fitter);
+            PlaceResult(fitter);
+            PlaceTableCards(preset, fitter);
+            PlaceOpponents(preset, fitter);
+            PlaceActions(fitter, handHeight);
+            PlaceChoiceSheet(fitter, handHeight);
+        }
+
+        private void PlaceHand(SafeAreaFitter fitter, float handHeight)
+        {
+            if (_handContainer == null)
+            {
+                return;
+            }
+
+            fitter.GetHandAnchors(out var minX, out var minY, out var maxX, out var maxY);
+            var rt = _handContainer;
+            rt.anchorMin = new Vector2(minX, minY);
+            rt.anchorMax = new Vector2(maxX, maxY);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, bottom);
-            rt.sizeDelta = new Vector2(0f, height);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(0f, handHeight);
+        }
+
+        private void PlaceHud(SafeAreaFitter fitter)
+        {
+            if (_matchHud == null)
+            {
+                return;
+            }
+
+            var rt = _matchHud.CachedRectTransform;
+            rt.anchorMin = new Vector2(0.5f, fitter.AnchorMaxY);
+            rt.anchorMax = new Vector2(0.5f, fitter.AnchorMaxY);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(1000f, 140f);
+        }
+
+        private void PlaceStatus(SafeAreaFitter fitter)
+        {
+            if (_statusText == null)
+            {
+                return;
+            }
+
+            var rt = _statusText.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, fitter.AnchorMaxY);
+            rt.anchorMax = new Vector2(0.5f, fitter.AnchorMaxY);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, -148f);
+            rt.sizeDelta = new Vector2(1000f, 56f);
+        }
+
+        private void PlaceResult(SafeAreaFitter fitter)
+        {
+            if (_resultText == null)
+            {
+                return;
+            }
+
+            fitter.MapPoint(0.5f, 0.55f, out var x, out var y);
+            var rt = _resultText.rectTransform;
+            rt.anchorMin = new Vector2(x, y);
+            rt.anchorMax = new Vector2(x, y);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(900f, 220f);
+        }
+
+        private void PlaceTableCards(LayoutPreset preset, SafeAreaFitter fitter)
+        {
+            var ny = LayoutPresetUtil.DiscardNormalizedY(preset);
+            fitter.MapPoint(0.5f, ny, out var cx, out var cy);
+            PlaceAnchored(_discardView != null ? _discardView.CachedRectTransform : null, cx, cy, new Vector2(160f, 224f));
+            fitter.MapPoint(preset == LayoutPreset.MobilePortrait ? 0.28f : 0.32f, ny, out var dx, out var dy);
+            PlaceAnchored(_deckView != null ? _deckView.CachedRectTransform : null, dx, dy, new Vector2(140f, 196f));
+        }
+
+        private void PlaceOpponents(LayoutPreset preset, SafeAreaFitter fitter)
+        {
+            LayoutPresetUtil.OpponentCardSize(preset, out var w, out var h);
+            var size = new Vector2(w, h);
+            var placed = LayoutPresetUtil.PlaceOpponents(_seatCount, _viewingSeat, _seatScratch);
+            for (var i = 0; i < _opponentViews.Length; i++)
+            {
+                var view = _opponentViews[i];
+                if (view == null)
+                {
+                    continue;
+                }
+
+                var show = i < placed;
+                view.CachedGameObject.SetActive(show);
+                if (!show)
+                {
+                    continue;
+                }
+
+                fitter.MapPoint(_seatScratch[i].Nx, _seatScratch[i].Ny, out var x, out var y);
+                PlaceAnchored(view.CachedRectTransform, x, y, size);
+            }
+        }
+
+        private void PlaceActions(SafeAreaFitter fitter, float handHeight)
+        {
+            var y = handHeight + 48f;
+            PlaceActionButton(_drawButton, 0.22f, fitter.AnchorMinY, y);
+            PlaceActionButton(_acceptButton, 0.5f, fitter.AnchorMinY, y);
+            PlaceActionButton(_surrenderButton, 0.78f, fitter.AnchorMinY, y);
+        }
+
+        private static void PlaceActionButton(CommonButton button, float nx, float anchorY, float y)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var rt = button.CachedRectTransform;
+            rt.anchorMin = new Vector2(nx, anchorY);
+            rt.anchorMax = new Vector2(nx, anchorY);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, y);
+            rt.sizeDelta = new Vector2(200f, 72f);
+        }
+
+        private void PlaceChoiceSheet(SafeAreaFitter fitter, float handHeight)
+        {
+            if (_choiceSheet == null)
+            {
+                return;
+            }
+
+            var rt = _choiceSheet.CachedRectTransform;
+            rt.anchorMin = new Vector2(0.5f, fitter.AnchorMinY);
+            rt.anchorMax = new Vector2(0.5f, fitter.AnchorMinY);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, handHeight + 130f);
+            rt.sizeDelta = new Vector2(720f, 200f);
+        }
+
+        private static void PlaceAnchored(RectTransform rt, float nx, float ny, Vector2 size)
+        {
+            if (rt == null)
+            {
+                return;
+            }
+
+            rt.anchorMin = new Vector2(nx, ny);
+            rt.anchorMax = new Vector2(nx, ny);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = size;
         }
 
         private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
