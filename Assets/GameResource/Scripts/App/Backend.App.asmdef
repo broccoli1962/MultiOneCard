@@ -1,0 +1,17 @@
+{
+    "name": "Backend.App",
+    "rootNamespace": "Backend.App",
+    "references": [
+        "Game.Rules",
+        "Backend.Net"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
