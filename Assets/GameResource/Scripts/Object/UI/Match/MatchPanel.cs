@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Backend.App;
 using Backend.Net;
-using Backend.Object.Management;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -11,8 +11,9 @@ namespace Backend.Object.UI
 {
     /// <summary>
     /// 더미 매치 테이블 View. 표시와 입력만 담당한다.
+    /// 카드 확정은 <see cref="GamePointer"/> 가 맡고, 손패는 <see cref="HandLayout"/> 이 깐다.
     /// </summary>
-    public sealed class MatchPanel : UIPanel<MatchPresenter>
+    public sealed class MatchPanel : UIPanel<MatchPresenter>, IPointerClickHandler
     {
         private static readonly string[] SuitCodes =
         {
@@ -26,8 +27,10 @@ namespace Backend.Object.UI
         [SerializeField] private Text _statusText;
         [SerializeField] private Text _resultText;
         [SerializeField] private CardView _discardView;
+        [SerializeField] private CardView _deckView;
         [SerializeField] private CardView _opponentView;
         [SerializeField] private RectTransform _handContainer;
+        [SerializeField] private HandLayout _handLayout;
         [SerializeField] private CardView _cardPrefab;
         [SerializeField] private CanvasGroup _inputGroup;
         [SerializeField] private CommonButton _drawButton;
@@ -54,6 +57,9 @@ namespace Backend.Object.UI
         /// <summary>손패를 붙일 컨테이너.</summary>
         public RectTransform HandContainer => _handContainer;
 
+        /// <summary>손패 배치.</summary>
+        public HandLayout HandLayout => _handLayout;
+
         /// <summary>드로우 버튼.</summary>
         public event Action DrawClicked;
 
@@ -75,8 +81,11 @@ namespace Backend.Object.UI
         /// <summary>K Extra|Hide.</summary>
         public event Action<string> KingModeClicked;
 
-        /// <summary>손패 카드 탭. instanceId.</summary>
+        /// <summary>손패 카드 탭. instanceId. GamePointer 로 넘긴다.</summary>
         public event Action<int> CardClicked;
+
+        /// <summary>빈곳 탭 또는 우클릭. GamePointer.Cancel.</summary>
+        public event Action CancelPressed;
 
         protected override void Awake()
         {
@@ -99,7 +108,7 @@ namespace Backend.Object.UI
         /// </summary>
         public void EnsureLayout()
         {
-            if (_layoutReady && _handContainer != null && _cardPrefab != null)
+            if (_layoutReady && _handLayout != null && _cardPrefab != null)
             {
                 return;
             }
@@ -131,21 +140,9 @@ namespace Backend.Object.UI
 
             _opponentView = FindOrCreateCard("OpponentCard", new Vector2(0.5f, 1f), new Vector2(0f, -360f), new Vector2(140f, 196f));
             _discardView = FindOrCreateCard("DiscardTop", new Vector2(0.5f, 0.55f), new Vector2(0f, 40f), new Vector2(160f, 224f));
-
-            if (_handContainer == null)
-            {
-                var handGo = FindOrCreate("Hand", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                _handContainer = handGo.GetComponent<RectTransform>();
-                StretchBottom(_handContainer, 260f, 20f);
-                var layout = handGo.GetComponent<HorizontalLayoutGroup>();
-                layout.childAlignment = TextAnchor.MiddleCenter;
-                layout.childControlWidth = false;
-                layout.childControlHeight = false;
-                layout.childForceExpandWidth = false;
-                layout.childForceExpandHeight = false;
-                layout.spacing = 10f;
-                layout.padding = new RectOffset(16, 16, 8, 8);
-            }
+            _deckView = FindOrCreateCard("Deck", new Vector2(0.5f, 0.55f), new Vector2(-220f, 40f), new Vector2(140f, 196f));
+            _deckView.Clicked -= OnDeckClicked;
+            _deckView.Clicked += OnDeckClicked;
 
             if (_cardPrefab == null)
             {
@@ -155,6 +152,29 @@ namespace Backend.Object.UI
                 templateGo.SetActive(false);
                 _cardPrefab = templateGo.GetComponent<CardView>();
                 _cardPrefab.EnsureParts(_font);
+            }
+
+            if (_handContainer == null || _handLayout == null)
+            {
+                var handGo = FindOrCreate("Hand", typeof(RectTransform));
+                _handContainer = handGo.GetComponent<RectTransform>();
+                StretchBottom(_handContainer, 260f, 20f);
+                if (handGo.TryGetComponent(out HorizontalLayoutGroup group))
+                {
+                    group.enabled = false;
+                }
+
+                if (_handLayout == null && !handGo.TryGetComponent(out _handLayout))
+                {
+                    _handLayout = handGo.AddComponent<HandLayout>();
+                }
+            }
+
+            if (_handLayout != null)
+            {
+                _handLayout.Bind(_cardPrefab, _font);
+                _handLayout.CardClicked -= OnHandCardClicked;
+                _handLayout.CardClicked += OnHandCardClicked;
             }
 
             _drawButton = FindOrCreateActionButton("Draw", "드로우", new Vector2(0.2f, 0f), new Vector2(-80f, 300f));
@@ -197,6 +217,7 @@ namespace Backend.Object.UI
             IReadOnlyList<int> handIds,
             IReadOnlyList<string> handDefs,
             IReadOnlyCollection<int> selectedIds,
+            IReadOnlyList<bool> legalFlags,
             MatchPrompt prompt,
             string status,
             string result,
@@ -215,6 +236,12 @@ namespace Backend.Object.UI
             if (match != null)
             {
                 _discardView.BindDiscard(match.discardTop);
+                if (_deckView != null)
+                {
+                    _deckView.BindBack(match.deckCount);
+                    _deckView.SetInteractable(!inputLocked && prompt == MatchPrompt.None);
+                }
+
                 var opponentSeat = viewingSeat == 0 ? 1 : 0;
                 var opponentCount = match.handCounts != null && opponentSeat < match.handCounts.Length
                     ? match.handCounts[opponentSeat]
@@ -222,7 +249,7 @@ namespace Backend.Object.UI
                 _opponentView.BindBack(opponentCount);
             }
 
-            RenderHand(handIds, handDefs, selectedIds, prompt, inputLocked);
+            RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
             ShowPrompt(prompt);
             SetAcceptLabel(match, prompt);
             SetConfirmVisible(prompt == MatchPrompt.GiveCards || prompt == MatchPrompt.MirrorDiscard);
@@ -230,23 +257,20 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 풀에서 꺼낸 손패 카드를 반환 목록에 넣는다.
-        /// </summary>
-        public void TrackHandCard(CardView card)
-        {
-            _handCards.Add(card);
-        }
-
-        /// <summary>
         /// 현재 표시 중인 손패 카드.
         /// </summary>
-        public IReadOnlyList<CardView> HandCards => _handCards;
+        public IReadOnlyList<CardView> HandCards => _handLayout != null ? _handLayout.Cards : _handCards;
 
         /// <summary>
-        /// 손패 목록을 비운다. 풀 반환은 호출 측.
+        /// 손패를 풀에 돌려준다.
         /// </summary>
-        public void ClearHandTracking()
+        public void ReleaseHand()
         {
+            if (_handLayout != null)
+            {
+                _handLayout.Release();
+            }
+
             _handCards.Clear();
         }
 
@@ -264,64 +288,57 @@ namespace Backend.Object.UI
             _inputGroup.blocksRaycasts = true;
         }
 
-        private void RenderHand(
-            IReadOnlyList<int> handIds,
-            IReadOnlyList<string> handDefs,
-            IReadOnlyCollection<int> selectedIds,
-            MatchPrompt prompt,
-            bool inputLocked)
+        /// <summary>
+        /// 빈곳 좌클릭·우클릭은 선택을 해제한다. 카드는 자식이 먼저 받는다.
+        /// </summary>
+        public void OnPointerClick(PointerEventData eventData)
         {
-            var count = handIds != null ? handIds.Count : 0;
-            for (var i = 0; i < _handCards.Count; i++)
-            {
-                var card = _handCards[i];
-                card.Clicked -= OnCardClicked;
-                ObjectPoolManager.Release(card);
-            }
-
-            _handCards.Clear();
-
-            if (count == 0 || _cardPrefab == null)
+            if (eventData == null)
             {
                 return;
             }
 
-            ObjectPoolManager.GetOrCreatePool(_cardPrefab, _handContainer);
-            var multi = prompt == MatchPrompt.GiveCards || prompt == MatchPrompt.MirrorDiscard;
-            for (var i = 0; i < count; i++)
+            if (eventData.button == PointerEventData.InputButton.Right
+                || eventData.button == PointerEventData.InputButton.Left)
             {
-                var card = ObjectPoolManager.Get<CardView>();
-                if (card == null)
-                {
-                    continue;
-                }
-
-                card.CachedTransform.SetParent(_handContainer, false);
-                card.CachedRectTransform.sizeDelta = new Vector2(130f, 182f);
-                card.EnsureParts(_font);
-                card.Clicked -= OnCardClicked;
-                card.Clicked += OnCardClicked;
-                var id = handIds[i];
-                var def = handDefs != null && i < handDefs.Count ? handDefs[i] : "?";
-                var selected = ContainsId(selectedIds, id);
-                card.BindFront(id, def, selected);
-                card.SetInteractable(!inputLocked && prompt != MatchPrompt.Suit
-                    && prompt != MatchPrompt.QueenMode && prompt != MatchPrompt.KingMode);
-                if (multi)
-                {
-                    card.SetSelected(selected);
-                }
-
-                _handCards.Add(card);
+                CancelPressed?.Invoke();
             }
         }
 
-        private void OnCardClicked(CardView card)
+        private void RenderHand(
+            IReadOnlyList<int> handIds,
+            IReadOnlyList<string> handDefs,
+            IReadOnlyCollection<int> selectedIds,
+            IReadOnlyList<bool> legalFlags,
+            MatchPrompt prompt,
+            bool inputLocked)
         {
-            if (card != null)
+            if (_handLayout == null)
             {
-                CardClicked?.Invoke(card.InstanceId);
+                return;
             }
+
+            var cardsSelectable = !inputLocked
+                && prompt != MatchPrompt.Suit
+                && prompt != MatchPrompt.QueenMode
+                && prompt != MatchPrompt.KingMode;
+            var playHint = prompt == MatchPrompt.None;
+            _handLayout.Render(
+                handIds,
+                handDefs,
+                selectedIds,
+                playHint ? legalFlags : null,
+                cardsSelectable);
+        }
+
+        private void OnHandCardClicked(int instanceId)
+        {
+            CardClicked?.Invoke(instanceId);
+        }
+
+        private void OnDeckClicked(CardView _)
+        {
+            DrawClicked?.Invoke();
         }
 
         private void ShowPrompt(MatchPrompt prompt)
@@ -403,24 +420,6 @@ namespace Backend.Object.UI
             var color = string.IsNullOrEmpty(match.requiredColor) ? "-" : match.requiredColor;
             var spear = match.spearInStack ? " 죽창" : string.Empty;
             return $"보기P{viewingSeat} 턴P{match.currentSeat} {dir} 무늬{suit} 색{color} +{match.attackStack}{spear} Q×{match.queenStack} 조커 {match.jokerBw}/{match.jokerColor}/{match.jokerMoon} 덱{match.deckCount}";
-        }
-
-        private static bool ContainsId(IReadOnlyCollection<int> ids, int id)
-        {
-            if (ids == null)
-            {
-                return false;
-            }
-
-            foreach (var value in ids)
-            {
-                if (value == id)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static void EnsureEventSystem()

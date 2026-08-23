@@ -1,4 +1,5 @@
 using System;
+using Backend.App;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,6 +24,7 @@ namespace Backend.Object.UI
         [SerializeField] private Image _fill;
         [SerializeField] private Text _label;
         [SerializeField] private CommonButton _button;
+        [SerializeField] private CanvasGroup _group;
 
         private Vector2 _restAnchored;
 
@@ -102,6 +104,19 @@ namespace Backend.Object.UI
 
             _button.OnClick.RemoveListener(HandleClick);
             _button.OnClick.AddListener(HandleClick);
+
+            if (_group == null && !TryGetComponent(out _group))
+            {
+                _group = CachedGameObject.AddComponent<CanvasGroup>();
+            }
+        }
+
+        /// <summary>
+        /// HandLayout 이 정한 선택 전 위치.
+        /// </summary>
+        public void SetRest(Vector2 restAnchored)
+        {
+            _restAnchored = restAnchored;
         }
 
         /// <summary>
@@ -111,11 +126,11 @@ namespace Backend.Object.UI
         {
             InstanceId = instanceId;
             DefId = defId;
-            EnsureRest();
             _fill.color = FrontColor(defId);
             _label.text = string.IsNullOrEmpty(defId) ? "?" : defId;
             _label.color = FrontLabelColor(defId);
             SetInteractable(true);
+            SetLegal(true);
             SetSelected(selected);
         }
 
@@ -126,10 +141,10 @@ namespace Backend.Object.UI
         {
             InstanceId = -1;
             DefId = null;
-            EnsureRest();
             _fill.color = BackTint;
             _label.text = count.ToString();
             _label.color = Color.white;
+            SetLegal(true);
             SetInteractable(false);
             SetSelected(false);
         }
@@ -148,7 +163,6 @@ namespace Backend.Object.UI
         /// </summary>
         public void SetSelected(bool selected)
         {
-            EnsureRest();
             var pos = _restAnchored;
             if (selected)
             {
@@ -157,6 +171,24 @@ namespace Backend.Object.UI
 
             CachedRectTransform.anchoredPosition = pos;
             CachedTransform.localScale = selected ? new Vector3(1.06f, 1.06f, 1f) : Vector3.one;
+        }
+
+        /// <summary>
+        /// 합법=불투명, 불법=투명 40%·레이캐스트 차단.
+        /// </summary>
+        public void SetLegal(bool legal)
+        {
+            if (_group == null && !TryGetComponent(out _group))
+            {
+                _group = CachedGameObject.AddComponent<CanvasGroup>();
+            }
+
+            if (_group != null)
+            {
+                _group.alpha = legal ? 1f : GamePointer.IllegalAlpha;
+                _group.blocksRaycasts = legal;
+                _group.interactable = legal;
+            }
         }
 
         /// <summary>
@@ -173,14 +205,6 @@ namespace Backend.Object.UI
         private void HandleClick()
         {
             Clicked?.Invoke(this);
-        }
-
-        private void EnsureRest()
-        {
-            if (_restAnchored == Vector2.zero)
-            {
-                _restAnchored = CachedRectTransform.anchoredPosition;
-            }
         }
 
         private static Color FrontColor(string defId)

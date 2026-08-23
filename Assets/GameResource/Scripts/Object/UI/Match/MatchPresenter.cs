@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Backend.App;
 using Backend.Net;
-using Backend.Object.Management;
 
 namespace Backend.Object.UI
 {
@@ -15,9 +14,11 @@ namespace Backend.Object.UI
         private const int DummySeed = 1;
 
         private readonly HashSet<int> _selectedIds = new HashSet<int>();
+        private readonly GamePointer _pointer = new GamePointer();
 
         private LocalLoopback _loopback;
         private NetClient[] _clients;
+        private GamePointerInput _pointerInput;
         private int _viewSeat;
         private int _selectedPlayId = -1;
         private string _lastSentOp;
@@ -34,6 +35,7 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             BindView();
+            BindPointer();
             StartHotseat();
         }
 
@@ -42,6 +44,7 @@ namespace Backend.Object.UI
         /// </summary>
         public override void OnClose()
         {
+            UnbindPointer();
             UnbindView();
             ReleaseHand();
             StopHotseat();
@@ -70,6 +73,7 @@ namespace Backend.Object.UI
             View.QueenModeClicked += OnQueenModeClicked;
             View.KingModeClicked += OnKingModeClicked;
             View.CardClicked += OnCardClicked;
+            View.CancelPressed += OnCancelPressed;
         }
 
         private void UnbindView()
@@ -87,6 +91,32 @@ namespace Backend.Object.UI
             View.QueenModeClicked -= OnQueenModeClicked;
             View.KingModeClicked -= OnKingModeClicked;
             View.CardClicked -= OnCardClicked;
+            View.CancelPressed -= OnCancelPressed;
+        }
+
+        private void BindPointer()
+        {
+            UnbindPointer();
+            _pointer.PlayCardRequested += OnPlayCardRequested;
+            _pointer.DrawRequested += OnDrawRequested;
+            _pointer.SelectionChanged += OnPointerSelectionChanged;
+            _pointerInput = new GamePointerInput(_pointer);
+        }
+
+        private void UnbindPointer()
+        {
+            _pointer.PlayCardRequested -= OnPlayCardRequested;
+            _pointer.DrawRequested -= OnDrawRequested;
+            _pointer.SelectionChanged -= OnPointerSelectionChanged;
+            if (_pointerInput != null)
+            {
+                _pointerInput.Dispose();
+                _pointerInput = null;
+            }
+
+            _pointer.ClearSelection();
+            _pointer.SetLocked(false);
+            _pointer.SetPlayEnabled(true);
         }
 
         private void StartHotseat()
@@ -108,6 +138,7 @@ namespace Backend.Object.UI
             _result = null;
             _selectedPlayId = -1;
             _selectedIds.Clear();
+            _pointer.ClearSelection();
             _surrenderArmed = false;
             _lastSentOp = null;
             _lastPlayedDefId = null;
@@ -244,6 +275,7 @@ namespace Backend.Object.UI
             _status = reject ?? "거절";
             _surrenderArmed = false;
             _selectedPlayId = -1;
+            _pointer.ClearSelection();
             switch (reject)
             {
                 case RejectCode.NeedSuitPick:
@@ -310,19 +342,20 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (_selectedPlayId == instanceId)
+            if (_pointer.SelectedInstanceId != instanceId)
             {
-                Send(ActiveClient(), OpCode.PlayCard, () => ActiveClient().PlayCard(instanceId));
-                _selectedPlayId = -1;
-                return;
+                _status = "다시 눌러 내기";
             }
 
-            _selectedPlayId = instanceId;
-            _status = "다시 눌러 내기";
-            Refresh();
+            _pointer.TapCard(instanceId);
         }
 
-        private void OnDrawClicked()
+        private void OnPlayCardRequested(int instanceId)
+        {
+            Send(ActiveClient(), OpCode.PlayCard, () => ActiveClient().PlayCard(instanceId));
+        }
+
+        private void OnDrawRequested()
         {
             if (IsLocked() || _prompt != MatchPrompt.None)
             {
@@ -331,6 +364,21 @@ namespace Backend.Object.UI
 
             _surrenderArmed = false;
             Send(ActiveClient(), OpCode.Draw, () => ActiveClient().Draw());
+        }
+
+        private void OnPointerSelectionChanged()
+        {
+            Refresh();
+        }
+
+        private void OnCancelPressed()
+        {
+            _pointer.Cancel();
+        }
+
+        private void OnDrawClicked()
+        {
+            _pointer.Draw();
         }
 
         private void OnAcceptClicked()
@@ -466,6 +514,9 @@ namespace Backend.Object.UI
             var selected = _prompt == MatchPrompt.GiveCards || _prompt == MatchPrompt.MirrorDiscard
                 ? _selectedIds
                 : PlaySelection();
+            var locked = IsLocked();
+            _pointer.SetLocked(locked);
+            _pointer.SetPlayEnabled(_prompt == MatchPrompt.None && !locked);
 
             View.Render(
                 match,
@@ -473,21 +524,38 @@ namespace Backend.Object.UI
                 client != null ? client.HandInstanceIds : null,
                 client != null ? client.HandDefIds : null,
                 selected,
+                BuildLegalFlags(match, client != null ? client.HandDefIds : null),
                 _prompt,
                 _status,
                 _result,
-                IsLocked());
+                locked);
         }
 
         private HashSet<int> PlaySelection()
         {
             var set = new HashSet<int>();
-            if (_selectedPlayId >= 0)
+            if (_pointer.HasSelection)
+            {
+                set.Add(_pointer.SelectedInstanceId);
+            }
+            else if (_selectedPlayId >= 0)
             {
                 set.Add(_selectedPlayId);
             }
 
             return set;
+        }
+
+        private static bool[] BuildLegalFlags(PublicMatchView match, IReadOnlyList<string> handDefs)
+        {
+            var count = handDefs != null ? handDefs.Count : 0;
+            var flags = new bool[count];
+            for (var i = 0; i < count; i++)
+            {
+                flags[i] = LegalHint.CanPlay(match, handDefs[i]);
+            }
+
+            return flags;
         }
 
         private bool IsLocked()
@@ -531,13 +599,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var cards = View.HandCards;
-            for (var i = 0; i < cards.Count; i++)
-            {
-                ObjectPoolManager.Release(cards[i]);
-            }
-
-            View.ClearHandTracking();
+            View.ReleaseHand();
         }
 
         private static int[] ToArray(HashSet<int> ids)
