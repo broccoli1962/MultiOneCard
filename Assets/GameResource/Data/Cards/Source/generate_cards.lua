@@ -369,8 +369,9 @@ local function opaqueBounds(src)
   return minx, miny, maxx, maxy
 end
 
-local function fitKeyed(name, maxW, maxH)
-  local key = "fit:" .. name .. ":" .. maxW .. "x" .. maxH
+local function fitKeyed(name, maxW, maxH, method)
+  method = method or "bilinear"
+  local key = "fit:" .. method .. ":" .. name .. ":" .. maxW .. "x" .. maxH
   if sizedCache[key] then
     return sizedCache[key]
   end
@@ -383,8 +384,12 @@ local function fitKeyed(name, maxW, maxH)
   local scale = math.min(maxW / cw, maxH / ch)
   local nw = math.max(1, math.floor(cw * scale + 0.5))
   local nh = math.max(1, math.floor(ch * scale + 0.5))
+  if method == "nearest" then
+    nw = math.max(4, math.floor(nw / 4) * 4)
+    nh = math.max(4, math.floor(nh / 4) * 4)
+  end
   if nw ~= crop.width or nh ~= crop.height then
-    crop:resize{ size = Size(nw, nh), method = "bilinear" }
+    crop:resize{ size = Size(nw, nh), method = method }
   end
   sizedCache[key] = crop
   return crop
@@ -600,7 +605,7 @@ local function drawJoker(kind)
 end
 
 local function drawSpecial(id)
-  local file, caption, maxW, maxH, cy
+  local file, caption, maxW, maxH, cy, method
   if id == "SPEC:SPEAR" then
     file, caption, maxW, maxH, cy = "spec_spear.png", "SPEAR", 420, 700, 500
   elseif id == "SPEC:PASS" then
@@ -608,7 +613,7 @@ local function drawSpecial(id)
   elseif id == "SPEC:REVJOKER" then
     file, caption, maxW, maxH, cy = "spec_rev.png", "RE", 520, 520, 500
   elseif id == "SPEC:COUNTER" then
-    file, caption, maxW, maxH, cy = "spec_counter.png", "CTR", 540, 640, 500
+    file, caption, maxW, maxH, cy, method = "spec_counter.png", "CTR", 540, 640, 500, "nearest"
   elseif id == "SPEC:MIRROR" then
     file, caption, maxW, maxH, cy = "spec_mirror.png", "MIRROR", 480, 640, 500
   elseif id == "SPEC:PILL_BK" then
@@ -619,7 +624,7 @@ local function drawSpecial(id)
     file, caption, maxW, maxH, cy = "spec_pill_bl.png", "PILL", 520, 240, 500
   end
   local img = newWildFace()
-  blitCentered(img, fitKeyed(file, maxW, maxH), CX, cy)
+  blitCentered(img, fitKeyed(file, maxW, maxH, method), CX, cy)
   drawCaptionRainbow(img, caption)
   return img
 end
