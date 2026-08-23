@@ -1,5 +1,5 @@
 -- OneTable Official 89 CardDefId fronts + BACK at native 384x540 (32:45).
--- Shaded pips, court portraits, detailed jokers/specials. Not a 64x90 upscale.
+-- Clean AA illustration: no paper grain, no dither hatch. Not a 64x90 upscale.
 
 local OUT = [[D:/Unity/MultiOneCard/Assets/GameResource/Data/Cards]]
 local SRC = OUT .. "/Source/OneTableCards.aseprite"
@@ -114,6 +114,41 @@ local function put(img, x, y, col)
   end
 end
 
+local function putBlend(img, x, y, col, a)
+  if a <= 0.004 or x < 0 or y < 0 or x >= W or y >= H then
+    return
+  end
+  if a >= 0.996 then
+    img:putPixel(x, y, col)
+    return
+  end
+  local bg = Color(img:getPixel(x, y))
+  img:putPixel(x, y, C(
+    clamp8(bg.red + (col.red - bg.red) * a),
+    clamp8(bg.green + (col.green - bg.green) * a),
+    clamp8(bg.blue + (col.blue - bg.blue) * a)
+  ))
+end
+
+local function cover(a)
+  if a >= 1 then
+    return 1
+  end
+  if a <= 0 then
+    return 0
+  end
+  return a
+end
+
+local function stampCover(img, x, y, col, a)
+  a = cover(a)
+  if a >= 1 then
+    put(img, x, y, col)
+  elseif a > 0 then
+    putBlend(img, x, y, col, a)
+  end
+end
+
 local function fillRect(img, x, y, w, h, col)
   for iy = y, y + h - 1 do
     for ix = x, x + w - 1 do
@@ -122,28 +157,17 @@ local function fillRect(img, x, y, w, h, col)
   end
 end
 
-local function inRoundRect(x, y, w, h, rad)
-  if x < 0 or y < 0 or x >= w or y >= h then
-    return false
-  end
-  if x >= rad and x < w - rad then
-    return true
-  end
-  if y >= rad and y < h - rad then
-    return true
-  end
-  local cx = x < rad and rad or (w - 1 - rad)
-  local cy = y < rad and rad or (h - 1 - rad)
-  local dx, dy = x - cx, y - cy
-  return dx * dx + dy * dy <= rad * rad
+local function sdfRoundRect(px, py, w, h, rad)
+  local qx = math.abs(px - (w - 1) * 0.5) - (w * 0.5 - rad)
+  local qy = math.abs(py - (h - 1) * 0.5) - (h * 0.5 - rad)
+  local ox, oy = math.max(qx, 0), math.max(qy, 0)
+  return math.sqrt(ox * ox + oy * oy) + math.min(math.max(qx, qy), 0) - rad
 end
 
 local function fillRoundRect(img, col)
   for y = 0, H - 1 do
     for x = 0, W - 1 do
-      if inRoundRect(x, y, W, H, RAD) then
-        put(img, x, y, col)
-      end
+      stampCover(img, x, y, col, 0.5 - sdfRoundRect(x + 0.5, y + 0.5, W, H, RAD))
     end
   end
 end
@@ -151,69 +175,62 @@ end
 local function strokeRoundRect(img, inset, thick, col)
   local rw, rh = W - inset * 2, H - inset * 2
   local rad = math.max(4, RAD - inset)
-  for y = 0, rh - 1 do
-    for x = 0, rw - 1 do
-      if inRoundRect(x, y, rw, rh, rad) then
-        local inner = inRoundRect(x - thick, y - thick, rw - thick * 2, rh - thick * 2, math.max(2, rad - thick))
-        if not inner then
-          put(img, x + inset, y + inset, col)
-        end
-      end
+  for y = 0, rh + 1 do
+    for x = 0, rw + 1 do
+      local d = sdfRoundRect(x + 0.5, y + 0.5, rw, rh, rad)
+      local a = math.min(0.5 - d, d + thick + 0.5)
+      stampCover(img, x + inset, y + inset, col, a)
     end
   end
 end
 
 local function fillCircle(img, cx, cy, r, col)
-  local r2 = r * r
-  for y = cy - r, cy + r do
-    for x = cx - r, cx + r do
-      local dx, dy = x - cx, y - cy
-      if dx * dx + dy * dy <= r2 then
-        put(img, x, y, col)
-      end
+  local minx, maxx = math.floor(cx - r - 1), math.ceil(cx + r + 1)
+  local miny, maxy = math.floor(cy - r - 1), math.ceil(cy + r + 1)
+  for y = miny, maxy do
+    for x = minx, maxx do
+      local dx, dy = x + 0.5 - cx, y + 0.5 - cy
+      stampCover(img, x, y, col, r + 0.5 - math.sqrt(dx * dx + dy * dy))
     end
   end
 end
 
 local function fillEllipse(img, cx, cy, rx, ry, col)
-  local rx2, ry2 = rx * rx, ry * ry
-  for y = cy - ry, cy + ry do
-    for x = cx - rx, cx + rx do
-      local dx, dy = x - cx, y - cy
-      if dx * dx * ry2 + dy * dy * rx2 <= rx2 * ry2 then
-        put(img, x, y, col)
-      end
+  local minx, maxx = math.floor(cx - rx - 1), math.ceil(cx + rx + 1)
+  local miny, maxy = math.floor(cy - ry - 1), math.ceil(cy + ry + 1)
+  for y = miny, maxy do
+    for x = minx, maxx do
+      local nx = (x + 0.5 - cx) / (rx + 0.0001)
+      local ny = (y + 0.5 - cy) / (ry + 0.0001)
+      local d = math.sqrt(nx * nx + ny * ny)
+      stampCover(img, x, y, col, (1.0 - d) * math.min(rx, ry) + 0.5)
     end
   end
 end
 
 local function strokeCircle(img, cx, cy, r, thick, col)
-  local r2 = r * r
-  local inner = math.max(0, r - thick)
-  local i2 = inner * inner
-  for y = cy - r, cy + r do
-    for x = cx - r, cx + r do
-      local dx, dy = x - cx, y - cy
-      local d2 = dx * dx + dy * dy
-      if d2 <= r2 and d2 >= i2 then
-        put(img, x, y, col)
-      end
+  local minx, maxx = math.floor(cx - r - 1), math.ceil(cx + r + 1)
+  local miny, maxy = math.floor(cy - r - 1), math.ceil(cy + r + 1)
+  local inner = r - thick
+  for y = miny, maxy do
+    for x = minx, maxx do
+      local dx, dy = x + 0.5 - cx, y + 0.5 - cy
+      local d = math.sqrt(dx * dx + dy * dy)
+      stampCover(img, x, y, col, math.min(r + 0.5 - d, d - inner + 0.5))
     end
   end
 end
 
 local function strokeEllipse(img, cx, cy, rx, ry, thick, col)
-  local rx2, ry2 = rx * rx, ry * ry
-  local irx, iry = math.max(1, rx - thick), math.max(1, ry - thick)
-  local irx2, iry2 = irx * irx, iry * iry
-  for y = cy - ry, cy + ry do
-    for x = cx - rx, cx + rx do
-      local dx, dy = x - cx, y - cy
-      if dx * dx * ry2 + dy * dy * rx2 <= rx2 * ry2 then
-        if dx * dx * iry2 + dy * dy * irx2 > irx2 * iry2 then
-          put(img, x, y, col)
-        end
-      end
+  local minx, maxx = math.floor(cx - rx - 1), math.ceil(cx + rx + 1)
+  local miny, maxy = math.floor(cy - ry - 1), math.ceil(cy + ry + 1)
+  local k = math.min(rx, ry)
+  for y = miny, maxy do
+    for x = minx, maxx do
+      local nx = (x + 0.5 - cx) / (rx + 0.0001)
+      local ny = (y + 0.5 - cy) / (ry + 0.0001)
+      local d = (math.sqrt(nx * nx + ny * ny) - 1) * k
+      stampCover(img, x, y, col, math.min(0.5 - d, d + thick + 0.5))
     end
   end
 end
@@ -276,30 +293,37 @@ local function fillSparkle(img, cx, cy, arm, col)
 end
 
 local function fillDiamond(img, cx, cy, hw, hh, col)
-  for y = cy - hh, cy + hh do
-    local t = 1 - math.abs(y - cy) / math.max(1, hh)
-    local w = math.floor(hw * t)
-    for x = cx - w, cx + w do
-      put(img, x, y, col)
+  for y = math.floor(cy - hh - 1), math.ceil(cy + hh + 1) do
+    for x = math.floor(cx - hw - 1), math.ceil(cx + hw + 1) do
+      local ty = 1 - math.abs(y + 0.5 - cy) / math.max(0.001, hh)
+      local w = hw * math.max(0, ty)
+      stampCover(img, x, y, col, w + 0.5 - math.abs(x + 0.5 - cx))
     end
   end
 end
 
 local function fillHeart(img, cx, cy, s, col, flip)
-  local r = math.max(4, math.floor(s * 0.26))
+  local r = math.max(4, s * 0.26)
   local oy = flip and 1 or -1
-  local top = cy + oy * math.floor(s * 0.12)
-  fillCircle(img, cx - r, top, r, col)
-  fillCircle(img, cx + r, top, r, col)
-  local y0 = cy + oy * math.floor(s * 0.02)
-  local y1 = cy - oy * math.floor(s * 0.50)
-  local step = y0 < y1 and 1 or -1
-  local half = math.floor(s * 0.52)
-  for y = y0, y1, step do
-    local t = math.abs(y - y0) / math.max(1, math.abs(y1 - y0))
-    local w = math.floor(half * (1 - t))
-    for x = cx - w, cx + w do
-      put(img, x, y, col)
+  local top = cy + oy * (s * 0.12)
+  local y0 = cy + oy * (s * 0.02)
+  local y1 = cy - oy * (s * 0.50)
+  local half = s * 0.52
+  local miny = math.floor(math.min(y0, y1, top - r) - 1)
+  local maxy = math.ceil(math.max(y0, y1, top + r) + 1)
+  for y = miny, maxy do
+    for x = math.floor(cx - half - r - 1), math.ceil(cx + half + r + 1) do
+      local dx1, dy1 = x + 0.5 - (cx - r), y + 0.5 - top
+      local dx2, dy2 = x + 0.5 - (cx + r), y + 0.5 - top
+      local a = math.max(r + 0.5 - math.sqrt(dx1 * dx1 + dy1 * dy1), r + 0.5 - math.sqrt(dx2 * dx2 + dy2 * dy2))
+      local denom = y1 - y0
+      if denom ~= 0 then
+        local t = (y + 0.5 - y0) / denom
+        if t >= 0 and t <= 1 then
+          a = math.max(a, half * (1 - t) + 0.5 - math.abs(x + 0.5 - cx))
+        end
+      end
+      stampCover(img, x, y, col, a)
     end
   end
 end
@@ -338,20 +362,16 @@ local function fillClub(img, cx, cy, s, col, flip)
 end
 
 local function fillMoonSuit(img, cx, cy, s, col, flip)
-  local r = math.floor(s * 0.46)
-  local ox = cx + math.floor(s * 0.16)
+  local r = s * 0.46
+  local ox = cx + s * 0.16
   local oy = cy + (flip and 4 or -4)
-  local r2 = math.floor(s * 0.38)
-  local rsq, r2sq = r * r, r2 * r2
-  for y = cy - r, cy + r do
-    for x = cx - r, cx + r do
-      local dx, dy = x - cx, y - cy
-      if dx * dx + dy * dy <= rsq then
-        local dx2, dy2 = x - ox, y - oy
-        if dx2 * dx2 + dy2 * dy2 > r2sq then
-          put(img, x, y, col)
-        end
-      end
+  local r2 = s * 0.38
+  for y = math.floor(cy - r - 1), math.ceil(cy + r + 1) do
+    for x = math.floor(cx - r - 1), math.ceil(cx + r + 1) do
+      local dx, dy = x + 0.5 - cx, y + 0.5 - cy
+      local dx2, dy2 = x + 0.5 - ox, y + 0.5 - oy
+      local a = math.min(r + 0.5 - math.sqrt(dx * dx + dy * dy), math.sqrt(dx2 * dx2 + dy2 * dy2) - r2 + 0.5)
+      stampCover(img, x, y, col, a)
     end
   end
 end
@@ -373,23 +393,20 @@ local function fillSuit(img, suit, cx, cy, size, col, flip)
 end
 
 local function shadeSuitVolume(img, cx, cy, reach, col)
-  local hi, lo = shade(col, 1.26), shade(col, 0.72)
+  local hi, lo = shade(col, 1.18), shade(col, 0.78)
   for y = cy - reach, cy + reach do
     for x = cx - reach, cx + reach do
       if x >= 0 and y >= 0 and x < W and y < H and sameRgb(img:getPixel(x, y), col) then
-        local s = (x - cx) + (y - cy)
-        if s < -reach * 0.16 then
-          put(img, x, y, hi)
-        elseif s > reach * 0.20 then
-          put(img, x, y, lo)
-        end
+        local t = ((x - cx) + (y - cy)) / math.max(1, reach * 1.4)
+        t = math.max(0, math.min(1, (t + 1) * 0.5))
+        put(img, x, y, lerpCol(hi, lo, t))
       end
     end
   end
 end
 
 local function drawSuitDetailed(img, suit, cx, cy, size, col, flip)
-  fillSuit(img, suit, cx + 1, cy + 2, size + 2, shade(col, 0.42), flip)
+  fillSuit(img, suit, cx + 0.8, cy + 1.2, size + 1.5, shade(col, 0.55), flip)
   fillSuit(img, suit, cx, cy, size, col, flip)
   shadeSuitVolume(img, cx, cy, math.floor(size * 0.72), col)
 end
@@ -476,32 +493,15 @@ local function hairOf(suit)
   return C(22, 20, 26)
 end
 
-local function applyPaperGrain(img)
-  for y = 0, H - 1 do
-    for x = 0, W - 1 do
-      local n = (x * 131 + y * 313 + x * y * 7) % 13
-      if n <= 1 then
-        local c = Color(img:getPixel(x, y))
-        if c.alpha > 0 then
-          local f = n == 0 and 0.965 or 1.035
-          put(img, x, y, C(clamp8(c.red * f), clamp8(c.green * f), clamp8(c.blue * f), c.alpha))
-        end
-      end
-    end
-  end
-end
-
 local function drawFiligree(img, border)
   local function arm(x, y, sx, sy)
-    for i = 0, 28 do
+    for i = 0, 22 do
       put(img, x + i * sx, y, GOLD)
       put(img, x, y + i * sy, GOLD)
     end
-    fillDiamond(img, x + 20 * sx, y, 3, 4, GOLD_LIGHT)
-    fillDiamond(img, x, y + 20 * sy, 3, 4, GOLD_LIGHT)
-    fillCircle(img, x + 7 * sx, y + 7 * sy, 2, border)
-    put(img, x + 12 * sx, y + 4 * sy, GOLD_DIM)
-    put(img, x + 4 * sx, y + 12 * sy, GOLD_DIM)
+    fillCircle(img, x + 16 * sx, y, 2, GOLD_LIGHT)
+    fillCircle(img, x, y + 16 * sy, 2, GOLD_LIGHT)
+    fillCircle(img, x + 6 * sx, y + 6 * sy, 2, border)
   end
   arm(26, 26, 1, 1)
   arm(W - 27, 26, -1, 1)
@@ -511,12 +511,10 @@ end
 
 local function drawFaceBase(img, border)
   fillRoundRect(img, FACE)
-  fillRect(img, 28, 36, W - 56, H - 72, FACE_INNER)
-  strokeRoundRect(img, 4, 5, border)
-  strokeRoundRect(img, 12, 3, GOLD)
-  strokeRoundRect(img, 18, 1, GOLD_DIM)
+  fillRect(img, 30, 38, W - 60, H - 76, FACE_INNER)
+  strokeRoundRect(img, 4, 4, border)
+  strokeRoundRect(img, 12, 2, GOLD)
   drawFiligree(img, border)
-  applyPaperGrain(img)
 end
 
 local function drawCornerIndex(img, rank, suit, ink)
@@ -620,9 +618,10 @@ local function inOval(x, y, cx, cy, rx, ry)
 end
 
 local function putOval(img, x, y, col, ocx, ocy, rx, ry)
-  if inOval(x + 0.5, y + 0.5, ocx, ocy, rx, ry) then
-    put(img, x, y, col)
-  end
+  local nx = (x + 0.5 - ocx) / rx
+  local ny = (y + 0.5 - ocy) / ry
+  local d = (math.sqrt(nx * nx + ny * ny) - 1) * math.min(rx, ry)
+  stampCover(img, x, y, col, 0.5 - d)
 end
 
 local function fillEllipseOval(img, cx, cy, rx, ry, col, ocx, ocy, orx, ory)
@@ -798,32 +797,33 @@ local function inMainCircle(x, y, r)
   return dx * dx + dy * dy <= r * r
 end
 
+local function clipCover(x, y, r)
+  r = r or 120
+  local dx, dy = x + 0.5 - CX, y + 0.5 - CY
+  return r + 0.5 - math.sqrt(dx * dx + dy * dy)
+end
+
 local function putInCircle(img, x, y, col, r)
-  if inMainCircle(x, y, r or 120) then
-    put(img, x, y, col)
-  end
+  stampCover(img, x, y, col, clipCover(x, y, r or 120))
 end
 
 local function fillCircleClipped(img, cx, cy, rad, col, clipR)
-  local r2 = rad * rad
-  for y = cy - rad, cy + rad do
-    for x = cx - rad, cx + rad do
-      local dx, dy = x - cx, y - cy
-      if dx * dx + dy * dy <= r2 then
-        putInCircle(img, x, y, col, clipR)
-      end
+  for y = math.floor(cy - rad - 1), math.ceil(cy + rad + 1) do
+    for x = math.floor(cx - rad - 1), math.ceil(cx + rad + 1) do
+      local dx, dy = x + 0.5 - cx, y + 0.5 - cy
+      stampCover(img, x, y, col, math.min(rad + 0.5 - math.sqrt(dx * dx + dy * dy), clipCover(x, y, clipR)))
     end
   end
 end
 
 local function fillEllipseClipped(img, cx, cy, rx, ry, col, clipR)
-  local rx2, ry2 = rx * rx, ry * ry
-  for y = cy - ry, cy + ry do
-    for x = cx - rx, cx + rx do
-      local dx, dy = x - cx, y - cy
-      if dx * dx * ry2 + dy * dy * rx2 <= rx2 * ry2 then
-        putInCircle(img, x, y, col, clipR)
-      end
+  local k = math.min(rx, ry)
+  for y = math.floor(cy - ry - 1), math.ceil(cy + ry + 1) do
+    for x = math.floor(cx - rx - 1), math.ceil(cx + rx + 1) do
+      local nx = (x + 0.5 - cx) / (rx + 0.0001)
+      local ny = (y + 0.5 - cy) / (ry + 0.0001)
+      local d = (math.sqrt(nx * nx + ny * ny) - 1) * k
+      stampCover(img, x, y, col, math.min(0.5 - d, clipCover(x, y, clipR)))
     end
   end
 end
@@ -865,278 +865,183 @@ local function grimPal(kind)
   }
 end
 
-local function faceEdgeX(y)
-  local y0, y1 = 188, 362
-  if y < y0 or y > y1 then
-    return -9999
+local function sdfCapsule(x, y, ax, ay, bx, by, r)
+  local pax, pay = x - ax, y - ay
+  local bax, bay = bx - ax, by - ay
+  local den = bax * bax + bay * bay
+  local h = 0
+  if den > 0 then
+    h = math.max(0, math.min(1, (pax * bax + pay * bay) / den))
   end
-  local t = (y - y0) / (y1 - y0)
-  local x
-  if t < 0.09 then
-    x = 186 + t * 140
-  elseif t < 0.20 then
-    x = 198 - (t - 0.09) * 70
-  elseif t < 0.34 then
-    x = 190
-  elseif t < 0.49 then
-    local u = (t - 0.34) / 0.15
-    x = 190 + math.sin(u * math.pi) * 42
-    if u > 0.72 then
-      x = x + math.floor((u - 0.72) * 18)
-    end
-  elseif t < 0.55 then
-    x = 176
-  elseif t < 0.78 then
-    local u = (t - 0.55) / 0.23
-    x = 184 + math.sin(u * math.pi) * 26
-  elseif t < 0.87 then
-    local u = (t - 0.78) / 0.09
-    x = 200 - math.sin(u * math.pi) * 20
-    if u > 0.35 and u < 0.7 then
-      x = x - 6
-    end
-  else
-    local u = (t - 0.87) / 0.13
-    x = 202 + u * 20
+  local dx, dy = pax - bax * h, pay - bay * h
+  return math.sqrt(dx * dx + dy * dy) - r
+end
+
+local function sdfEllipse(x, y, cx, cy, rx, ry)
+  local nx = (x - cx) / rx
+  local ny = (y - cy) / ry
+  return (math.sqrt(nx * nx + ny * ny) - 1) * math.min(rx, ry)
+end
+
+local function moonSdf(x, y)
+  local dOuter = math.sqrt((x - 156) * (x - 156) + (y - 278) * (y - 278)) - 96
+  local dCut = math.sqrt((x - 216) * (x - 216) + (y - 246) * (y - 246)) - 80
+  local d = math.max(dOuter, -dCut)
+  d = math.min(d, sdfCapsule(x, y, 176, 256, 230, 270, 7.5))
+  d = math.min(d, sdfCapsule(x, y, 220, 268, 228, 278, 4.2))
+  local dMouth = sdfEllipse(x, y, 176, 316, 28, 16)
+  if dMouth < 2 then
+    d = math.max(d, -dMouth)
   end
-  return math.floor(x)
+  local dClip = math.sqrt((x - CX) * (x - CX) + (y - CY) * (y - CY)) - 119
+  return math.max(d, dClip)
 end
 
 local function inMouth(x, y)
-  if y < 294 or y > 338 then
-    return false
-  end
-  local edge = faceEdgeX(y)
-  local t = (y - 294) / 44
-  local mid = 1 - math.abs(t - 0.5) * 2
-  local right = edge - 2
-  local left = right - (12 + math.floor(mid * 22))
-  return x >= left and x <= right and x >= 142
+  return sdfEllipse(x + 0.5, y + 0.5, 176, 316, 28, 16) < 0
 end
 
 local function inGrimMoon(x, y)
-  local mx, my, mr = 160, 276, 90
-  local dx, dy = x - mx, y - my
-  if dx * dx + dy * dy > mr * mr then
-    return false
-  end
-  if x > faceEdgeX(y) then
-    return false
-  end
-  if inMouth(x, y) then
-    return false
-  end
-  return true
+  return moonSdf(x + 0.5, y + 0.5) < 0
 end
 
-local function hatchDot(x, y)
-  return ((x * 3 + y * 5) % 7) == 0 or ((x + y * 2) % 11) == 0
-end
-
-local function drawCrater(img, cx, cy, r, pal, clipR)
-  for y = cy - r, cy + r do
-    for x = cx - r, cx + r do
-      local dx, dy = x - cx, y - cy
-      local d2 = dx * dx + dy * dy
-      if d2 <= r * r and inGrimMoon(x, y) then
-        local t = math.sqrt(d2) / r
-        local col = pal.shade
-        if t < 0.45 then
-          col = pal.deep
-        elseif t > 0.78 then
-          col = pal.mid
-        end
-        if hatchDot(x, y) then
-          col = pal.ink
-        end
-        putInCircle(img, x, y, col, clipR)
-      end
+local function drawLineAA(img, x0, y0, x1, y1, r, col, clipR)
+  local minx = math.floor(math.min(x0, x1) - r - 1)
+  local maxx = math.ceil(math.max(x0, x1) + r + 1)
+  local miny = math.floor(math.min(y0, y1) - r - 1)
+  local maxy = math.ceil(math.max(y0, y1) + r + 1)
+  for y = miny, maxy do
+    for x = minx, maxx do
+      local d = sdfCapsule(x + 0.5, y + 0.5, x0, y0, x1, y1, r)
+      stampCover(img, x, y, col, math.min(0.5 - d, clipCover(x, y, clipR)))
     end
   end
 end
 
-local function drawCrack(img, x0, y0, x1, y1, pal, clipR)
-  local n = math.max(8, math.floor(math.abs(x1 - x0) + math.abs(y1 - y0)))
-  local jx, jy = 0, 0
-  for i = 0, n do
-    local u = i / n
-    jx = jx + ((i * 17) % 5) - 2
-    jy = jy + ((i * 13) % 5) - 2
-    local x = math.floor(x0 + (x1 - x0) * u + jx * 0.15)
-    local y = math.floor(y0 + (y1 - y0) * u + jy * 0.15)
-    if inGrimMoon(x, y) or inMouth(x, y) then
-      putInCircle(img, x, y, pal.ink, clipR)
-      putInCircle(img, x + 1, y, pal.deep, clipR)
+local function drawCrater(img, cx, cy, r, pal, clipR)
+  for y = math.floor(cy - r - 1), math.ceil(cy + r + 1) do
+    for x = math.floor(cx - r - 1), math.ceil(cx + r + 1) do
+      if inGrimMoon(x, y) then
+        local dx, dy = x + 0.5 - cx, y + 0.5 - cy
+        local t = math.sqrt(dx * dx + dy * dy) / r
+        if t < 1.15 then
+          local col = lerpCol(pal.deep, pal.mid, math.max(0, math.min(1, (t - 0.15) / 0.7)))
+          if t > 0.72 then
+            col = lerpCol(pal.mid, pal.body, (t - 0.72) / 0.35)
+          end
+          stampCover(img, x, y, col, math.min(1.1 - t, clipCover(x, y, clipR)))
+        end
+      end
     end
   end
 end
 
 local function drawGrimMoon(img, kind, clipR)
   local pal = grimPal(kind)
-  local mx, my, mr = 160, 276, 90
-  for y = my - mr, my + mr do
-    for x = mx - mr, mx + mr do
-      if inMainCircle(x, y, clipR) and inGrimMoon(x, y) then
-        local t = (x - (mx - mr)) / (mr * 2)
-        local u = (y - (my - mr)) / (mr * 2)
-        local col = pal.body
-        if t < 0.22 then
-          col = pal.shade
-        elseif t < 0.40 then
-          col = pal.mid
-        elseif t > 0.72 and u < 0.42 then
-          col = lerpCol(pal.body, pal.eye, 0.35)
+  for y = CY - clipR - 1, CY + clipR + 1 do
+    for x = CX - clipR - 1, CX + clipR + 1 do
+      local d = moonSdf(x + 0.5, y + 0.5)
+      local a = 0.5 - d
+      if a > 0 then
+        local t = math.max(0, math.min(1, (x - 118) / 100))
+        local u = math.max(0, math.min(1, (y - 200) / 140))
+        local col = lerpCol(pal.mid, pal.body, t)
+        if t < 0.28 then
+          col = lerpCol(pal.shade, pal.mid, t / 0.28)
         end
-        if hatchDot(x, y) and t < 0.55 then
-          col = (t < 0.28) and pal.deep or pal.shade
+        if t > 0.62 and u < 0.42 then
+          col = lerpCol(col, pal.eye, (t - 0.62) * 0.55)
         end
-        if (x + y * 3) % 13 == 0 and t < 0.5 then
-          col = pal.ink
+        if d > -1.6 then
+          col = lerpCol(pal.ink, col, math.max(0, -d) / 1.6)
         end
-        putInCircle(img, x, y, col, clipR)
+        stampCover(img, x, y, col, math.min(a, clipCover(x, y, clipR)))
       end
     end
   end
 
-  for y = my - mr, my + mr do
-    for x = mx - mr, mx + mr do
-      if inMainCircle(x, y, clipR) and inGrimMoon(x, y) then
-        if not inGrimMoon(x + 1, y) or not inGrimMoon(x, y + 1) or not inGrimMoon(x - 1, y) then
-          putInCircle(img, x, y, pal.ink, clipR)
-        end
+  for y = 296, 338 do
+    for x = 146, 208 do
+      local md = sdfEllipse(x + 0.5, y + 0.5, 176, 316, 28, 16)
+      if md < 0.8 then
+        stampCover(img, x, y, pal.gum, math.min(0.5 - md, clipCover(x, y, clipR)))
       end
     end
   end
 
-  for y = 294, 338 do
-    for x = 140, 230 do
-      if inMouth(x, y) then
-        putInCircle(img, x, y, pal.gum, clipR)
-      end
-    end
+  for i = 0, 6 do
+    local tx = 154 + i * 7.2
+    local ty = 306 + math.abs(i - 3) * 1.4
+    fillEllipseClipped(img, tx, ty, 3.1, 5.2, pal.tooth, clipR)
+    fillEllipseClipped(img, tx + 1, ty + 11, 3.0, 4.6, pal.tooth, clipR)
   end
 
-  local teeth = {
-    { 156, 300, 8, 10 }, { 166, 298, 8, 11 }, { 176, 300, 8, 10 },
-    { 186, 304, 7, 9 }, { 194, 310, 6, 8 },
-    { 158, 318, 8, 10 }, { 168, 320, 8, 9 }, { 178, 322, 7, 8 },
-    { 187, 326, 6, 7 },
-  }
-  for i = 1, #teeth do
-    local tx, ty, tw, th = teeth[i][1], teeth[i][2], teeth[i][3], teeth[i][4]
-    for yy = ty, ty + th - 1 do
-      for xx = tx, tx + tw - 1 do
-        if inMouth(xx, yy) then
-          local col = pal.tooth
-          if xx == tx or yy == ty then
-            col = lerpCol(pal.tooth, pal.body, 0.3)
-          end
-          if xx == tx + tw - 1 or yy == ty + th - 1 then
-            col = pal.mid
-          end
-          putInCircle(img, xx, yy, col, clipR)
-        end
-      end
-    end
-  end
-
-  local ex, ey, er = 150, 244, 16
-  fillCircleClipped(img, ex, ey, er + 3, pal.deep, clipR)
+  local ex, ey, er = 148, 242, 17
+  fillCircleClipped(img, ex, ey, er + 2.2, pal.ink, clipR)
   fillCircleClipped(img, ex, ey, er, pal.eye, clipR)
-  strokeCircle(img, ex, ey, er, 2, pal.ink)
-  fillCircleClipped(img, ex + 1, ey + 1, 3, pal.ink, clipR)
-  putInCircle(img, ex - 4, ey - 5, WHITE, clipR)
-  for a = 0, 11 do
-    local ang = a * math.pi / 6
-    local x1 = ex + math.floor(math.cos(ang) * (er + 2))
-    local y1 = ey + math.floor(math.sin(ang) * (er + 2))
-    local x2 = ex + math.floor(math.cos(ang) * (er + 14 + a % 3))
-    local y2 = ey + math.floor(math.sin(ang) * (er + 14 + a % 3))
-    drawCrack(img, x1, y1, x2, y2, pal, clipR)
+  strokeCircle(img, ex, ey, er, 1.6, pal.ink)
+  fillCircleClipped(img, ex + 1, ey + 1, 2.4, pal.ink, clipR)
+  fillCircleClipped(img, ex - 4, ey - 5, 1.6, WHITE, clipR)
+  for a = 0, 9 do
+    local ang = a * math.pi / 5 + 0.2
+    drawLineAA(img,
+      ex + math.cos(ang) * (er + 1),
+      ey + math.sin(ang) * (er + 1),
+      ex + math.cos(ang) * (er + 11),
+      ey + math.sin(ang) * (er + 11),
+      0.7, pal.ink, clipR)
   end
 
-  fillPoly(img, {
-    { 172, 250 }, { 224, 266 }, { 218, 274 }, { 170, 278 },
-  }, pal.mid)
-  fillPoly(img, {
-    { 176, 252 }, { 216, 266 }, { 170, 270 },
-  }, pal.body)
-  fillPoly(img, {
-    { 216, 268 }, { 226, 272 }, { 214, 278 },
-  }, pal.shade)
-  for i = 0, 10 do
-    putInCircle(img, 176 + i * 4, 254 + math.floor(i * 1.2), pal.ink, clipR)
-  end
-  putInCircle(img, 214, 272, pal.deep, clipR)
-  putInCircle(img, 216, 274, pal.ink, clipR)
+  fillCircleClipped(img, 214, 274, 2.2, pal.deep, clipR)
 
-  drawCrater(img, 138, 298, 9, pal, clipR)
-  drawCrater(img, 150, 214, 6, pal, clipR)
-  drawCrater(img, 132, 258, 5, pal, clipR)
-  drawCrater(img, 146, 332, 7, pal, clipR)
-  drawCrater(img, 168, 206, 4, pal, clipR)
-  drawCrater(img, 134, 320, 4, pal, clipR)
-  drawCrater(img, 160, 228, 3, pal, clipR)
+  drawCrater(img, 136, 300, 10, pal, clipR)
+  drawCrater(img, 148, 214, 7, pal, clipR)
+  drawCrater(img, 130, 258, 6, pal, clipR)
+  drawCrater(img, 144, 334, 8, pal, clipR)
+  drawCrater(img, 166, 206, 5, pal, clipR)
+  drawCrater(img, 132, 322, 5, pal, clipR)
 
-  drawCrack(img, 136, 270, 148, 310, pal, clipR)
-  drawCrack(img, 142, 330, 168, 350, pal, clipR)
-  drawCrack(img, 168, 200, 150, 226, pal, clipR)
-  drawCrack(img, 178, 286, 200, 318, pal, clipR)
+  drawLineAA(img, 134, 268, 146, 308, 0.65, pal.ink, clipR)
+  drawLineAA(img, 144, 332, 166, 350, 0.65, pal.ink, clipR)
+  drawLineAA(img, 166, 202, 150, 224, 0.65, pal.ink, clipR)
 
   if kind == "COLOR" then
-    local bx, by = 198, 318
-    for i = 0, 54 do
-      local x = bx + math.floor(math.sin(i * 0.2) * 2 + i * 0.12)
-      local y = by + i
-      local r = (i < 8) and 4 or (i < 28 and 5 or 3)
-      fillCircleClipped(img, x, y, r, (i % 5 == 0) and BLOOD_DARK or BLOOD, clipR)
-    end
-    fillCircleClipped(img, 202, 338, 6, BLOOD, clipR)
-    fillCircleClipped(img, 206, 360, 5, BLOOD_DARK, clipR)
-    fillCircleClipped(img, 208, 376, 3, BLOOD_LIGHT, clipR)
-    fillEllipseClipped(img, 196, 320, 7, 4, BLOOD_LIGHT, clipR)
+    drawLineAA(img, 196, 322, 206, 372, 2.4, BLOOD, clipR)
+    fillCircleClipped(img, 200, 336, 5.5, BLOOD, clipR)
+    fillCircleClipped(img, 204, 356, 4.5, BLOOD_DARK, clipR)
+    fillCircleClipped(img, 207, 372, 3.2, BLOOD, clipR)
+    fillEllipseClipped(img, 194, 320, 6, 3.5, BLOOD_LIGHT, clipR)
   end
 end
 
 local function drawJokerStars(img, clipR)
   local seed = 17
-  for i = 1, 80 do
+  for i = 1, 36 do
     seed = (seed * 1103515245 + 12345) % 2147483647
     local ang = (seed % 360) * math.pi / 180
     seed = (seed * 1103515245 + 12345) % 2147483647
-    local dist = 8 + (seed % 108)
-    local x = CX + math.floor(math.cos(ang) * dist)
-    local y = CY + math.floor(math.sin(ang) * dist)
-    if inMainCircle(x, y, 108) and not inGrimMoon(x, y) and not inMouth(x, y) then
+    local dist = 18 + (seed % 96)
+    local x = CX + math.cos(ang) * dist
+    local y = CY + math.sin(ang) * dist
+    if clipCover(math.floor(x), math.floor(y), 108) > 0 and moonSdf(x, y) > 4 then
       seed = (seed * 1103515245 + 12345) % 2147483647
-      local kindStar = seed % 6
-      local col = (kindStar == 0) and C(255, 232, 160) or (kindStar == 1 and C(200, 220, 255) or C(240, 246, 255))
-      if kindStar >= 4 then
-        fillStar(img, x, y, 4 + (seed % 4), 2, col)
-      else
-        fillSparkle(img, x, y, 2 + (seed % 3), col)
-      end
+      local col = (seed % 3 == 0) and C(255, 232, 168) or C(226, 236, 255)
+      fillCircleClipped(img, x, y, 1.1 + (seed % 2) * 0.6, col, clipR)
     end
   end
 end
 
 local function drawJokerCircleChrome(img, fill, ring)
   fillCircle(img, CX, CY, 120, fill)
-  strokeCircle(img, CX, CY, 120, 5, ring)
-  strokeCircle(img, CX, CY, 114, 2, GOLD_DIM)
-  for i = 0, 23 do
-    local a = i * math.pi / 12
-    local x = CX + math.floor(math.cos(a) * 108)
-    local y = CY + math.floor(math.sin(a) * 108)
-    fillCircle(img, x, y, (i % 3 == 0) and 2 or 1, GOLD_LIGHT)
-  end
+  strokeCircle(img, CX, CY, 120, 4, ring)
+  strokeCircle(img, CX, CY, 114, 1.6, GOLD_DIM)
 end
 
 local function drawJoker(img, kind)
   local clipR = 120
   if kind == "BW" then
     drawFaceBase(img, INK_BLACK)
-    drawJokerCircleChrome(img, C(12, 12, 16), C(200, 200, 208))
+    drawJokerCircleChrome(img, C(12, 12, 16), C(196, 196, 204))
     drawGrimMoon(img, "BW", clipR)
   elseif kind == "COLOR" then
     drawFaceBase(img, JOKER_RED)
@@ -1144,12 +1049,9 @@ local function drawJoker(img, kind)
     drawGrimMoon(img, "COLOR", clipR)
   else
     drawFaceBase(img, JOKER_BLUE)
-    for r = 120, 16, -8 do
-      local t = 1 - r / 120
-      fillCircle(img, CX, CY, r, lerpCol(C(6, 10, 32), C(24, 46, 102), t * 0.6))
-    end
-    strokeCircle(img, CX, CY, 120, 5, C(120, 170, 255))
-    strokeCircle(img, CX, CY, 114, 2, GOLD_DIM)
+    fillCircle(img, CX, CY, 120, C(8, 14, 38))
+    strokeCircle(img, CX, CY, 120, 4, C(120, 170, 255))
+    strokeCircle(img, CX, CY, 114, 1.6, GOLD_DIM)
     drawJokerStars(img, clipR)
     drawGrimMoon(img, "MOON", clipR)
     drawJokerStars(img, clipR)
@@ -1296,35 +1198,18 @@ end
 
 local function drawBack(img)
   fillRoundRect(img, NAVY_DARK)
-  for y = 26, H - 27, 18 do
-    for x = 26, W - 27, 18 do
-      local alt = ((x / 18) + (y / 18)) % 2 < 1
-      if alt then
-        fillStar(img, x + 8, y + 8, 6, 2, NAVY_LIGHT)
-      else
-        fillMoonSuit(img, x + 8, y + 8, 13, NAVY_MID, false)
-      end
+  for y = 32, H - 33, 28 do
+    for x = 32, W - 33, 28 do
+      fillCircle(img, x + 10, y + 10, 2.2, NAVY_MID)
     end
   end
-  strokeRoundRect(img, 4, 6, GOLD)
-  strokeRoundRect(img, 14, 3, NAVY_LIGHT)
-  strokeRoundRect(img, 20, 1, GOLD_DIM)
-  local function arm(x, y, sx, sy)
-    for i = 0, 22 do
-      put(img, x + i * sx, y, GOLD)
-      put(img, x, y + i * sy, GOLD)
-    end
-    fillStar(img, x + 10 * sx, y + 10 * sy, 5, 2, GOLD_LIGHT)
-  end
-  arm(28, 28, 1, 1)
-  arm(W - 29, 28, -1, 1)
-  arm(28, H - 29, 1, -1)
-  arm(W - 29, H - 29, -1, -1)
-  fillCircle(img, CX, CY, 84, NAVY)
-  strokeCircle(img, CX, CY, 84, 6, GOLD)
-  strokeCircle(img, CX, CY, 74, 2, GOLD_DIM)
-  fillStar(img, CX, CY - 58, 8, 3, GOLD_LIGHT)
-  fillMoonSuit(img, CX, CY + 58, 22, GOLD, false)
+  strokeRoundRect(img, 4, 5, GOLD)
+  strokeRoundRect(img, 14, 2, NAVY_LIGHT)
+  fillCircle(img, CX, CY, 82, NAVY)
+  strokeCircle(img, CX, CY, 82, 5, GOLD)
+  strokeCircle(img, CX, CY, 73, 1.6, GOLD_DIM)
+  fillStar(img, CX, CY - 54, 8, 3, GOLD_LIGHT)
+  fillMoonSuit(img, CX, CY + 54, 22, GOLD, false)
   local tw = textWidth("OT", 6)
   stampText(img, "OT", CX - math.floor(tw / 2), CY - 28, GOLD, 6, false)
 end
