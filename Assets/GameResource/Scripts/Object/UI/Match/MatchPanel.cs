@@ -1,0 +1,759 @@
+using System;
+using System.Collections.Generic;
+using Backend.Net;
+using Backend.Object.Management;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.UI;
+
+namespace Backend.Object.UI
+{
+    /// <summary>
+    /// 더미 매치 테이블 View. 표시와 입력만 담당한다.
+    /// </summary>
+    public sealed class MatchPanel : UIPanel<MatchPresenter>
+    {
+        private static readonly string[] SuitCodes =
+        {
+            SuitCode.Spade, SuitCode.Heart, SuitCode.Diamond, SuitCode.Club, SuitCode.Star, SuitCode.Moon,
+        };
+
+        private static readonly string[] SuitLabels = { "S", "H", "D", "C", "R", "M" };
+
+        [SerializeField] private Font _font;
+        [SerializeField] private Text _hudText;
+        [SerializeField] private Text _statusText;
+        [SerializeField] private Text _resultText;
+        [SerializeField] private CardView _discardView;
+        [SerializeField] private CardView _opponentView;
+        [SerializeField] private RectTransform _handContainer;
+        [SerializeField] private CardView _cardPrefab;
+        [SerializeField] private CanvasGroup _inputGroup;
+        [SerializeField] private CommonButton _drawButton;
+        [SerializeField] private CommonButton _acceptButton;
+        [SerializeField] private CommonButton _confirmButton;
+        [SerializeField] private CommonButton _surrenderButton;
+        [SerializeField] private GameObject _suitRow;
+        [SerializeField] private GameObject _queenRow;
+        [SerializeField] private GameObject _kingRow;
+        [SerializeField] private CommonButton _queenReverseButton;
+        [SerializeField] private CommonButton _queenGiveButton;
+        [SerializeField] private CommonButton _kingExtraButton;
+        [SerializeField] private CommonButton _kingHideButton;
+
+        private readonly List<CardView> _handCards = new List<CardView>();
+        private readonly CommonButton[] _suitButtons = new CommonButton[6];
+        private bool _layoutReady;
+        private long _deadlineMs;
+        private string _hudBase = string.Empty;
+
+        /// <summary>손패 풀용 템플릿.</summary>
+        public CardView CardPrefab => _cardPrefab;
+
+        /// <summary>손패를 붙일 컨테이너.</summary>
+        public RectTransform HandContainer => _handContainer;
+
+        /// <summary>드로우 버튼.</summary>
+        public event Action DrawClicked;
+
+        /// <summary>공격·Q 감수 버튼.</summary>
+        public event Action AcceptClicked;
+
+        /// <summary>지급·미러 버림 확정.</summary>
+        public event Action ConfirmClicked;
+
+        /// <summary>기권 버튼. 두 번 확인은 Presenter.</summary>
+        public event Action SurrenderClicked;
+
+        /// <summary>7 이후 문양. 값은 SuitCode.</summary>
+        public event Action<string> SuitClicked;
+
+        /// <summary>Q Reverse|Give.</summary>
+        public event Action<string> QueenModeClicked;
+
+        /// <summary>K Extra|Hide.</summary>
+        public event Action<string> KingModeClicked;
+
+        /// <summary>손패 카드 탭. instanceId.</summary>
+        public event Action<int> CardClicked;
+
+        protected override void Awake()
+        {
+            if (Application.isPlaying)
+            {
+                EnsureLayout();
+            }
+
+            base.Awake();
+        }
+
+        private void Update()
+        {
+            Presenter?.Tick();
+            RefreshTimer();
+        }
+
+        /// <summary>
+        /// 프리팹 미배선이어도 더미 테이블을 만들 수 있게 자식을 채운다.
+        /// </summary>
+        public void EnsureLayout()
+        {
+            if (_layoutReady && _handContainer != null && _cardPrefab != null)
+            {
+                return;
+            }
+
+            EnsureEventSystem();
+
+            var rt = CachedRectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            if (!TryGetComponent(out Image bg))
+            {
+                bg = CachedGameObject.AddComponent<Image>();
+            }
+
+            bg.color = new Color(0.08f, 0.28f, 0.18f, 1f);
+            bg.raycastTarget = true;
+
+            if (_inputGroup == null && !TryGetComponent(out _inputGroup))
+            {
+                _inputGroup = CachedGameObject.AddComponent<CanvasGroup>();
+            }
+
+            _hudText = FindOrCreateText("Hud", new Vector2(0.5f, 1f), new Vector2(0f, -80f), new Vector2(1000f, 140f), 34f);
+            _statusText = FindOrCreateText("Status", new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(1000f, 56f), 28f);
+            _resultText = FindOrCreateText("Result", new Vector2(0.5f, 0.55f), new Vector2(0f, 80f), new Vector2(900f, 220f), 36f);
+
+            _opponentView = FindOrCreateCard("OpponentCard", new Vector2(0.5f, 1f), new Vector2(0f, -360f), new Vector2(140f, 196f));
+            _discardView = FindOrCreateCard("DiscardTop", new Vector2(0.5f, 0.55f), new Vector2(0f, 40f), new Vector2(160f, 224f));
+
+            if (_handContainer == null)
+            {
+                var handGo = FindOrCreate("Hand", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                _handContainer = handGo.GetComponent<RectTransform>();
+                StretchBottom(_handContainer, 260f, 20f);
+                var layout = handGo.GetComponent<HorizontalLayoutGroup>();
+                layout.childAlignment = TextAnchor.MiddleCenter;
+                layout.childControlWidth = false;
+                layout.childControlHeight = false;
+                layout.childForceExpandWidth = false;
+                layout.childForceExpandHeight = false;
+                layout.spacing = 10f;
+                layout.padding = new RectOffset(16, 16, 8, 8);
+            }
+
+            if (_cardPrefab == null)
+            {
+                var templateGo = FindOrCreate("CardTemplate", typeof(RectTransform), typeof(Image), typeof(CardView), typeof(CommonButton));
+                var templateRt = templateGo.GetComponent<RectTransform>();
+                templateRt.sizeDelta = new Vector2(130f, 182f);
+                templateGo.SetActive(false);
+                _cardPrefab = templateGo.GetComponent<CardView>();
+                _cardPrefab.EnsureParts(_font);
+            }
+
+            _drawButton = FindOrCreateActionButton("Draw", "드로우", new Vector2(0.2f, 0f), new Vector2(-80f, 300f));
+            _acceptButton = FindOrCreateActionButton("Accept", "받기", new Vector2(0.4f, 0f), new Vector2(40f, 300f));
+            _confirmButton = FindOrCreateActionButton("Confirm", "확정", new Vector2(0.6f, 0f), new Vector2(160f, 300f));
+            _surrenderButton = FindOrCreateActionButton("Surrender", "기권", new Vector2(0.8f, 0f), new Vector2(280f, 300f));
+
+            _suitRow = FindOrCreateRow("SuitRow", new Vector2(0f, 430f), 6, SuitLabels, i =>
+            {
+                _suitButtons[i] = null;
+            });
+            WireSuitRow();
+
+            _queenRow = FindOrCreateChoiceRow("QueenRow", new Vector2(0f, 430f),
+                ("Reverse", "뒤집기"), ("Give", "주기"),
+                out _queenReverseButton, out _queenGiveButton);
+            _kingRow = FindOrCreateChoiceRow("KingRow", new Vector2(0f, 430f),
+                ("Extra", "한장더"), ("Hide", "숨기기"),
+                out _kingExtraButton, out _kingHideButton);
+
+            BindButton(_drawButton, () => DrawClicked?.Invoke());
+            BindButton(_acceptButton, () => AcceptClicked?.Invoke());
+            BindButton(_confirmButton, () => ConfirmClicked?.Invoke());
+            BindButton(_surrenderButton, () => SurrenderClicked?.Invoke());
+            BindButton(_queenReverseButton, () => QueenModeClicked?.Invoke(QueenModeName.Reverse));
+            BindButton(_queenGiveButton, () => QueenModeClicked?.Invoke(QueenModeName.Give));
+            BindButton(_kingExtraButton, () => KingModeClicked?.Invoke(KingModeName.Extra));
+            BindButton(_kingHideButton, () => KingModeClicked?.Invoke(KingModeName.Hide));
+
+            ShowPrompt(MatchPrompt.None);
+            _layoutReady = true;
+        }
+
+        /// <summary>
+        /// 공개 상태와 핫시트 손패를 그린다.
+        /// </summary>
+        public void Render(
+            PublicMatchView match,
+            int viewingSeat,
+            IReadOnlyList<int> handIds,
+            IReadOnlyList<string> handDefs,
+            IReadOnlyCollection<int> selectedIds,
+            MatchPrompt prompt,
+            string status,
+            string result,
+            bool inputLocked)
+        {
+            EnsureLayout();
+
+            _hudBase = FormatHud(match, viewingSeat);
+            _deadlineMs = match != null ? match.deadlineMs : 0;
+            RefreshTimer();
+
+            _statusText.text = status ?? string.Empty;
+            _resultText.text = result ?? string.Empty;
+            _resultText.gameObject.SetActive(!string.IsNullOrEmpty(result));
+
+            if (match != null)
+            {
+                _discardView.BindDiscard(match.discardTop);
+                var opponentSeat = viewingSeat == 0 ? 1 : 0;
+                var opponentCount = match.handCounts != null && opponentSeat < match.handCounts.Length
+                    ? match.handCounts[opponentSeat]
+                    : 0;
+                _opponentView.BindBack(opponentCount);
+            }
+
+            RenderHand(handIds, handDefs, selectedIds, prompt, inputLocked);
+            ShowPrompt(prompt);
+            SetAcceptLabel(match, prompt);
+            SetConfirmVisible(prompt == MatchPrompt.GiveCards || prompt == MatchPrompt.MirrorDiscard);
+            SetInputLocked(inputLocked);
+        }
+
+        /// <summary>
+        /// 풀에서 꺼낸 손패 카드를 반환 목록에 넣는다.
+        /// </summary>
+        public void TrackHandCard(CardView card)
+        {
+            _handCards.Add(card);
+        }
+
+        /// <summary>
+        /// 현재 표시 중인 손패 카드.
+        /// </summary>
+        public IReadOnlyList<CardView> HandCards => _handCards;
+
+        /// <summary>
+        /// 손패 목록을 비운다. 풀 반환은 호출 측.
+        /// </summary>
+        public void ClearHandTracking()
+        {
+            _handCards.Clear();
+        }
+
+        /// <summary>
+        /// ack 대기 중 입력을 잠근다.
+        /// </summary>
+        public void SetInputLocked(bool locked)
+        {
+            if (_inputGroup == null)
+            {
+                return;
+            }
+
+            _inputGroup.interactable = !locked;
+            _inputGroup.blocksRaycasts = true;
+        }
+
+        private void RenderHand(
+            IReadOnlyList<int> handIds,
+            IReadOnlyList<string> handDefs,
+            IReadOnlyCollection<int> selectedIds,
+            MatchPrompt prompt,
+            bool inputLocked)
+        {
+            var count = handIds != null ? handIds.Count : 0;
+            for (var i = 0; i < _handCards.Count; i++)
+            {
+                var card = _handCards[i];
+                card.Clicked -= OnCardClicked;
+                ObjectPoolManager.Release(card);
+            }
+
+            _handCards.Clear();
+
+            if (count == 0 || _cardPrefab == null)
+            {
+                return;
+            }
+
+            ObjectPoolManager.GetOrCreatePool(_cardPrefab, _handContainer);
+            var multi = prompt == MatchPrompt.GiveCards || prompt == MatchPrompt.MirrorDiscard;
+            for (var i = 0; i < count; i++)
+            {
+                var card = ObjectPoolManager.Get<CardView>();
+                if (card == null)
+                {
+                    continue;
+                }
+
+                card.CachedTransform.SetParent(_handContainer, false);
+                card.CachedRectTransform.sizeDelta = new Vector2(130f, 182f);
+                card.EnsureParts(_font);
+                card.Clicked -= OnCardClicked;
+                card.Clicked += OnCardClicked;
+                var id = handIds[i];
+                var def = handDefs != null && i < handDefs.Count ? handDefs[i] : "?";
+                var selected = ContainsId(selectedIds, id);
+                card.BindFront(id, def, selected);
+                card.SetInteractable(!inputLocked && prompt != MatchPrompt.Suit
+                    && prompt != MatchPrompt.QueenMode && prompt != MatchPrompt.KingMode);
+                if (multi)
+                {
+                    card.SetSelected(selected);
+                }
+
+                _handCards.Add(card);
+            }
+        }
+
+        private void OnCardClicked(CardView card)
+        {
+            if (card != null)
+            {
+                CardClicked?.Invoke(card.InstanceId);
+            }
+        }
+
+        private void ShowPrompt(MatchPrompt prompt)
+        {
+            if (_suitRow != null)
+            {
+                _suitRow.SetActive(prompt == MatchPrompt.Suit);
+            }
+
+            if (_queenRow != null)
+            {
+                _queenRow.SetActive(prompt == MatchPrompt.QueenMode);
+            }
+
+            if (_kingRow != null)
+            {
+                _kingRow.SetActive(prompt == MatchPrompt.KingMode);
+            }
+        }
+
+        private void SetAcceptLabel(PublicMatchView match, MatchPrompt prompt)
+        {
+            var showAttack = match != null && match.attackStack > 0 && prompt == MatchPrompt.None;
+            var showQueen = match != null && match.queenStack > 0 && prompt == MatchPrompt.None;
+            if (_acceptButton != null)
+            {
+                _acceptButton.CachedGameObject.SetActive(showAttack || showQueen);
+                var label = _acceptButton.GetComponentInChildren<Text>();
+                if (label != null)
+                {
+                    if (showAttack)
+                    {
+                        label.text = $"받기 ({match.attackStack}장)";
+                    }
+                    else if (showQueen)
+                    {
+                        label.text = $"받기 (Q×{match.queenStack})";
+                    }
+                }
+            }
+        }
+
+        private void SetConfirmVisible(bool visible)
+        {
+            if (_confirmButton != null)
+            {
+                _confirmButton.CachedGameObject.SetActive(visible);
+            }
+        }
+
+        private void RefreshTimer()
+        {
+            if (_hudText == null)
+            {
+                return;
+            }
+
+            var remain = 0;
+            if (_deadlineMs > 0)
+            {
+                var left = _deadlineMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                remain = left > 0 ? (int)(left / 1000L) : 0;
+            }
+
+            _hudText.text = string.IsNullOrEmpty(_hudBase)
+                ? string.Empty
+                : $"{_hudBase}  {remain}초";
+        }
+
+        private static string FormatHud(PublicMatchView match, int viewingSeat)
+        {
+            if (match == null)
+            {
+                return "대기";
+            }
+
+            var dir = match.direction < 0 ? "시계" : "반시계";
+            var suit = string.IsNullOrEmpty(match.requiredSuit) ? "-" : match.requiredSuit;
+            var color = string.IsNullOrEmpty(match.requiredColor) ? "-" : match.requiredColor;
+            var spear = match.spearInStack ? " 죽창" : string.Empty;
+            return $"보기P{viewingSeat} 턴P{match.currentSeat} {dir} 무늬{suit} 색{color} +{match.attackStack}{spear} Q×{match.queenStack} 조커 {match.jokerBw}/{match.jokerColor}/{match.jokerMoon} 덱{match.deckCount}";
+        }
+
+        private static bool ContainsId(IReadOnlyCollection<int> ids, int id)
+        {
+            if (ids == null)
+            {
+                return false;
+            }
+
+            foreach (var value in ids)
+            {
+                if (value == id)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void EnsureEventSystem()
+        {
+            if (EventSystem.current != null)
+            {
+                return;
+            }
+
+            var go = new GameObject("EventSystem");
+            go.AddComponent<EventSystem>();
+            go.AddComponent<InputSystemUIInputModule>();
+        }
+
+        private Text FindOrCreateText(string name, Vector2 anchor, Vector2 pos, Vector2 size, float fontSize)
+        {
+            var existing = CachedTransform.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(Text));
+                go.transform.SetParent(CachedTransform, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchor;
+            rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+
+            if (!go.TryGetComponent(out Text text))
+            {
+                text = go.AddComponent<Text>();
+            }
+
+            text.fontSize = (int)fontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            if (_font != null)
+            {
+                text.font = _font;
+            }
+
+            return text;
+        }
+
+        private CardView FindOrCreateCard(string name, Vector2 anchor, Vector2 pos, Vector2 size)
+        {
+            var existing = CachedTransform.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CardView), typeof(CommonButton));
+                go.transform.SetParent(CachedTransform, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchor;
+            rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+
+            if (!go.TryGetComponent(out CardView card))
+            {
+                card = go.AddComponent<CardView>();
+            }
+
+            card.EnsureParts(_font);
+            return card;
+        }
+
+        private CommonButton FindOrCreateActionButton(string name, string label, Vector2 anchor, Vector2 pos)
+        {
+            var existing = CachedTransform.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
+                go.transform.SetParent(CachedTransform, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchor;
+            rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(200f, 72f);
+            if (go.TryGetComponent(out Image image))
+            {
+                image.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
+            }
+
+            if (!go.TryGetComponent(out CommonButton button))
+            {
+                button = go.AddComponent<CommonButton>();
+            }
+
+            button.useSound = false;
+            EnsureButtonLabel(go.transform, label, 30f);
+            return button;
+        }
+
+        private GameObject FindOrCreateRow(string name, Vector2 pos, int count, string[] labels, Action<int> onIndex)
+        {
+            var existing = CachedTransform.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                go.transform.SetParent(CachedTransform, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(900f, 80f);
+            var layout = go.GetComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = 8f;
+            layout.childForceExpandWidth = true;
+
+            for (var i = 0; i < count; i++)
+            {
+                var childName = name + labels[i];
+                var child = go.transform.Find(childName);
+                GameObject childGo;
+                if (child != null)
+                {
+                    childGo = child.gameObject;
+                }
+                else
+                {
+                    childGo = new GameObject(childName, typeof(RectTransform), typeof(Image), typeof(CommonButton));
+                    childGo.transform.SetParent(go.transform, false);
+                }
+
+                childGo.GetComponent<RectTransform>().sizeDelta = new Vector2(120f, 72f);
+                if (childGo.TryGetComponent(out Image image))
+                {
+                    image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
+                }
+
+                if (!childGo.TryGetComponent(out CommonButton button))
+                {
+                    button = childGo.AddComponent<CommonButton>();
+                }
+
+                button.useSound = false;
+                EnsureButtonLabel(childGo.transform, labels[i], 28f);
+                onIndex?.Invoke(i);
+                _suitButtons[i] = button;
+            }
+
+            return go;
+        }
+
+        private GameObject FindOrCreateChoiceRow(
+            string name,
+            Vector2 pos,
+            (string id, string label) left,
+            (string id, string label) right,
+            out CommonButton leftButton,
+            out CommonButton rightButton)
+        {
+            var existing = CachedTransform.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                go.transform.SetParent(CachedTransform, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(520f, 80f);
+            var layout = go.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 16f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+
+            leftButton = FindOrCreateChildButton(go.transform, name + left.id, left.label);
+            rightButton = FindOrCreateChildButton(go.transform, name + right.id, right.label);
+            return go;
+        }
+
+        private CommonButton FindOrCreateChildButton(Transform parent, string name, string label)
+        {
+            var existing = parent.Find(name);
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(CommonButton));
+                go.transform.SetParent(parent, false);
+            }
+
+            go.GetComponent<RectTransform>().sizeDelta = new Vector2(220f, 72f);
+            if (go.TryGetComponent(out Image image))
+            {
+                image.color = new Color(0.2f, 0.2f, 0.22f, 0.95f);
+            }
+
+            if (!go.TryGetComponent(out CommonButton button))
+            {
+                button = go.AddComponent<CommonButton>();
+            }
+
+            button.useSound = false;
+            EnsureButtonLabel(go.transform, label, 28f);
+            return button;
+        }
+
+        private void WireSuitRow()
+        {
+            for (var i = 0; i < _suitButtons.Length; i++)
+            {
+                var suit = SuitCodes[i];
+                BindButton(_suitButtons[i], () => SuitClicked?.Invoke(suit));
+            }
+        }
+
+        private void EnsureButtonLabel(Transform parent, string label, float fontSize)
+        {
+            var existing = parent.Find("Label");
+            GameObject go;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+            }
+            else
+            {
+                go = new GameObject("Label", typeof(RectTransform), typeof(Text));
+                go.transform.SetParent(parent, false);
+            }
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            if (!go.TryGetComponent(out Text text))
+            {
+                text = go.AddComponent<Text>();
+            }
+
+            text.text = label;
+            text.fontSize = (int)fontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            if (_font != null)
+            {
+                text.font = _font;
+            }
+        }
+
+        private GameObject FindOrCreate(string name, params Type[] components)
+        {
+            var existing = CachedTransform.Find(name);
+            if (existing != null)
+            {
+                return existing.gameObject;
+            }
+
+            var go = new GameObject(name, components);
+            go.transform.SetParent(CachedTransform, false);
+            return go;
+        }
+
+        private static void StretchBottom(RectTransform rt, float height, float bottom)
+        {
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(0f, bottom);
+            rt.sizeDelta = new Vector2(0f, height);
+        }
+
+        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.OnClick.RemoveAllListeners();
+            button.OnClick.AddListener(action);
+        }
+    }
+
+    /// <summary>
+    /// 호스트 Reject·이벤트 이후 화면에 띄울 선택. 판결이 아니다.
+    /// </summary>
+    public enum MatchPrompt
+    {
+        None,
+        Suit,
+        QueenMode,
+        KingMode,
+        HideUnder,
+        GiveCards,
+        MirrorDiscard,
+    }
+}

@@ -1,0 +1,221 @@
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Backend.Object.UI
+{
+    /// <summary>
+    /// 더미 테이블용 사각형 카드 플레이스홀더.
+    /// 앞면은 defId 텍스트, 뒷면은 장수. 수는 판결하지 않는다.
+    /// </summary>
+    public sealed class CardView : UIView
+    {
+        /// <summary>기획서 §8 선택 시 위로 올리는 픽셀.</summary>
+        public const float SelectedLift = 16f;
+
+        private static readonly Color FrontTint = new Color(0.93f, 0.9f, 0.82f, 1f);
+        private static readonly Color BackTint = new Color(0.22f, 0.28f, 0.4f, 1f);
+        private static readonly Color SuitBlack = new Color(0.18f, 0.18f, 0.2f, 1f);
+        private static readonly Color SuitRed = new Color(0.72f, 0.18f, 0.2f, 1f);
+        private static readonly Color SuitBlue = new Color(0.16f, 0.32f, 0.72f, 1f);
+        private static readonly Color SpecTint = new Color(0.45f, 0.38f, 0.22f, 1f);
+
+        [SerializeField] private Image _fill;
+        [SerializeField] private Text _label;
+        [SerializeField] private CommonButton _button;
+
+        private Vector2 _restAnchored;
+
+        /// <summary>앞면이면 인스턴스 id. 뒷면·버림은 -1.</summary>
+        public int InstanceId { get; private set; } = -1;
+
+        /// <summary>앞면 defId. 뒷면이면 null.</summary>
+        public string DefId { get; private set; }
+
+        /// <summary>카드 탭. 풀 반환 후에도 구독은 유지한다.</summary>
+        public event Action<CardView> Clicked;
+
+        /// <summary>
+        /// 인스펙터 미배선 시 플레이스홀더 자식과 버튼을 만든다.
+        /// </summary>
+        public void EnsureParts(Font font)
+        {
+            if (_fill == null && !TryGetComponent(out _fill))
+            {
+                _fill = CachedGameObject.AddComponent<Image>();
+            }
+
+            _fill.raycastTarget = true;
+
+            if (_label == null)
+            {
+                var labelTf = CachedTransform.Find("Label");
+                GameObject labelGo;
+                if (labelTf == null)
+                {
+                    labelGo = new GameObject("Label", typeof(RectTransform));
+                    labelGo.transform.SetParent(CachedTransform, false);
+                }
+                else
+                {
+                    labelGo = labelTf.gameObject;
+                }
+
+                if (!labelGo.TryGetComponent(out _label))
+                {
+                    _label = labelGo.AddComponent<Text>();
+                }
+
+                var labelRt = _label.rectTransform;
+                labelRt.anchorMin = Vector2.zero;
+                labelRt.anchorMax = Vector2.one;
+                labelRt.offsetMin = new Vector2(6f, 6f);
+                labelRt.offsetMax = new Vector2(-6f, -6f);
+            }
+
+            _label.raycastTarget = false;
+            _label.alignment = TextAnchor.MiddleCenter;
+            _label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _label.verticalOverflow = VerticalWrapMode.Truncate;
+            _label.fontSize = 26;
+            _label.color = Color.white;
+            if (font != null)
+            {
+                _label.font = font;
+            }
+
+            if (_button == null)
+            {
+                TryGetComponent(out _button);
+            }
+
+            if (_button == null)
+            {
+                _button = CachedGameObject.AddComponent<CommonButton>();
+            }
+
+            _button.useSound = false;
+            if (_button.OnClick == null)
+            {
+                _button.OnClick = new UnityEngine.Events.UnityEvent();
+            }
+
+            _button.OnClick.RemoveListener(HandleClick);
+            _button.OnClick.AddListener(HandleClick);
+        }
+
+        /// <summary>
+        /// 내 손패 앞면. selected 면 16px 올린다.
+        /// </summary>
+        public void BindFront(int instanceId, string defId, bool selected)
+        {
+            InstanceId = instanceId;
+            DefId = defId;
+            EnsureRest();
+            _fill.color = FrontColor(defId);
+            _label.text = string.IsNullOrEmpty(defId) ? "?" : defId;
+            _label.color = FrontLabelColor(defId);
+            SetInteractable(true);
+            SetSelected(selected);
+        }
+
+        /// <summary>
+        /// 상대 뒷면 플레이스홀더. 장수만 표시한다.
+        /// </summary>
+        public void BindBack(int count)
+        {
+            InstanceId = -1;
+            DefId = null;
+            EnsureRest();
+            _fill.color = BackTint;
+            _label.text = count.ToString();
+            _label.color = Color.white;
+            SetInteractable(false);
+            SetSelected(false);
+        }
+
+        /// <summary>
+        /// 공개 버림 top. 탭하지 않는다.
+        /// </summary>
+        public void BindDiscard(string defId)
+        {
+            BindFront(-1, defId, false);
+            SetInteractable(false);
+        }
+
+        /// <summary>
+        /// 선택 여부에 따라 카드를 16px 올린다.
+        /// </summary>
+        public void SetSelected(bool selected)
+        {
+            EnsureRest();
+            var pos = _restAnchored;
+            if (selected)
+            {
+                pos.y += SelectedLift;
+            }
+
+            CachedRectTransform.anchoredPosition = pos;
+            CachedTransform.localScale = selected ? new Vector3(1.06f, 1.06f, 1f) : Vector3.one;
+        }
+
+        /// <summary>
+        /// 입력 가능 여부를 버튼에 반영한다.
+        /// </summary>
+        public void SetInteractable(bool interactable)
+        {
+            if (_button != null)
+            {
+                _button.interactable = interactable;
+            }
+        }
+
+        private void HandleClick()
+        {
+            Clicked?.Invoke(this);
+        }
+
+        private void EnsureRest()
+        {
+            if (_restAnchored == Vector2.zero)
+            {
+                _restAnchored = CachedRectTransform.anchoredPosition;
+            }
+        }
+
+        private static Color FrontColor(string defId)
+        {
+            if (string.IsNullOrEmpty(defId))
+            {
+                return FrontTint;
+            }
+
+            if (defId.StartsWith("SPEC", StringComparison.Ordinal) || defId.StartsWith("JOKER", StringComparison.Ordinal))
+            {
+                return SpecTint;
+            }
+
+            return FrontTint;
+        }
+
+        private static Color FrontLabelColor(string defId)
+        {
+            if (string.IsNullOrEmpty(defId) || defId.Length < 1)
+            {
+                return SuitBlack;
+            }
+
+            switch (defId[0])
+            {
+                case 'H':
+                case 'D':
+                    return SuitRed;
+                case 'R':
+                case 'M':
+                    return SuitBlue;
+                default:
+                    return SuitBlack;
+            }
+        }
+    }
+}
