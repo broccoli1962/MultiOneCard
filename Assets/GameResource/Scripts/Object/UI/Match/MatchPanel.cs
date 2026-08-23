@@ -16,7 +16,7 @@ namespace Backend.Object.UI
     public sealed class MatchPanel : UIPanel<MatchPresenter>, IPointerClickHandler
     {
         [SerializeField] private Font _font;
-        [SerializeField] private Text _hudText;
+        [SerializeField] private MatchHud _matchHud;
         [SerializeField] private Text _statusText;
         [SerializeField] private Text _resultText;
         [SerializeField] private CardView _discardView;
@@ -33,8 +33,6 @@ namespace Backend.Object.UI
 
         private readonly List<CardView> _handCards = new List<CardView>();
         private bool _layoutReady;
-        private long _deadlineMs;
-        private string _hudBase = string.Empty;
 
         /// <summary>손패 풀용 템플릿.</summary>
         public CardView CardPrefab => _cardPrefab;
@@ -47,6 +45,9 @@ namespace Backend.Object.UI
 
         /// <summary>7·Q·K·미러·지급 선택 시트.</summary>
         public ChoiceSheet ChoiceSheet => _choiceSheet;
+
+        /// <summary>턴·조커값·공격 스택 HUD.</summary>
+        public MatchHud MatchHud => _matchHud;
 
         /// <summary>드로우 버튼.</summary>
         public event Action DrawClicked;
@@ -88,7 +89,10 @@ namespace Backend.Object.UI
         private void Update()
         {
             Presenter?.Tick();
-            RefreshTimer();
+            if (_matchHud != null)
+            {
+                _matchHud.Tick();
+            }
         }
 
         /// <summary>
@@ -122,7 +126,14 @@ namespace Backend.Object.UI
                 _inputGroup = CachedGameObject.AddComponent<CanvasGroup>();
             }
 
-            _hudText = FindOrCreateText("Hud", new Vector2(0.5f, 1f), new Vector2(0f, -80f), new Vector2(1000f, 140f), 34f);
+            if (_matchHud == null)
+            {
+                var hudGo = FindOrCreate("MatchHud", typeof(RectTransform), typeof(MatchHud));
+                _matchHud = hudGo.GetComponent<MatchHud>();
+            }
+
+            _matchHud.EnsureLayout(_font);
+            HideChild("Hud");
             _statusText = FindOrCreateText("Status", new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(1000f, 56f), 28f);
             _resultText = FindOrCreateText("Result", new Vector2(0.5f, 0.55f), new Vector2(0f, 80f), new Vector2(900f, 220f), 36f);
 
@@ -211,9 +222,10 @@ namespace Backend.Object.UI
         {
             EnsureLayout();
 
-            _hudBase = FormatHud(match, viewingSeat);
-            _deadlineMs = match != null ? match.deadlineMs : 0;
-            RefreshTimer();
+            if (_matchHud != null)
+            {
+                _matchHud.Bind(match, viewingSeat);
+            }
 
             _statusText.text = status ?? string.Empty;
             _resultText.text = result ?? string.Empty;
@@ -391,39 +403,6 @@ namespace Backend.Object.UI
                     }
                 }
             }
-        }
-
-        private void RefreshTimer()
-        {
-            if (_hudText == null)
-            {
-                return;
-            }
-
-            var remain = 0;
-            if (_deadlineMs > 0)
-            {
-                var left = _deadlineMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                remain = left > 0 ? (int)(left / 1000L) : 0;
-            }
-
-            _hudText.text = string.IsNullOrEmpty(_hudBase)
-                ? string.Empty
-                : $"{_hudBase}  {remain}초";
-        }
-
-        private static string FormatHud(PublicMatchView match, int viewingSeat)
-        {
-            if (match == null)
-            {
-                return "대기";
-            }
-
-            var dir = match.direction < 0 ? "시계" : "반시계";
-            var suit = string.IsNullOrEmpty(match.requiredSuit) ? "-" : match.requiredSuit;
-            var color = string.IsNullOrEmpty(match.requiredColor) ? "-" : match.requiredColor;
-            var spear = match.spearInStack ? " 죽창" : string.Empty;
-            return $"보기P{viewingSeat} 턴P{match.currentSeat} {dir} 무늬{suit} 색{color} +{match.attackStack}{spear} Q×{match.queenStack} 조커 {match.jokerBw}/{match.jokerColor}/{match.jokerMoon} 덱{match.deckCount}";
         }
 
         private static void EnsureEventSystem()

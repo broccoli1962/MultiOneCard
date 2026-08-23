@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Backend.App;
 using Backend.Net;
+using Backend.Object.Management;
+using Cysharp.Threading.Tasks;
 
 namespace Backend.Object.UI
 {
@@ -26,6 +28,7 @@ namespace Backend.Object.UI
         private string _status;
         private string _result;
         private bool _surrenderArmed;
+        private bool _resultOpened;
 
         /// <summary>
         /// 루프백 호스트를 열고 입력을 NetClient 커맨드로만 보낸다.
@@ -146,6 +149,7 @@ namespace Backend.Object.UI
             _prompt = MatchPrompt.None;
             _status = "준비";
             _result = null;
+            _resultOpened = false;
             _selectedPlayId = -1;
             _pointer.SetSheet(GamePointerSheet.None);
             _pointer.ClearAllSelections();
@@ -210,8 +214,9 @@ namespace Backend.Object.UI
             if (ev.ev == EvCode.MatchEnded)
             {
                 _prompt = MatchPrompt.None;
-                _result = FormatResult(ev.result);
+                _result = null;
                 _status = "종료";
+                OpenResult(ev);
             }
 
             InferPrompt(ev);
@@ -602,6 +607,45 @@ namespace Backend.Object.UI
             return null;
         }
 
+        private void OpenResult(EventMessage ev)
+        {
+            if (_resultOpened || ev == null || ev.result == null)
+            {
+                return;
+            }
+
+            _resultOpened = true;
+            ResultPresenter.Prepare(
+                ev.result,
+                BuildNicks(),
+                ev.deadlineMs,
+                vote => ActiveClient()?.RematchVote(vote),
+                OnResultClosed);
+            UIManager.OpenAsync<ResultPanel>().Forget();
+        }
+
+        private void OnResultClosed(bool rematchYes)
+        {
+            _resultOpened = false;
+            if (!rematchYes || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            StartHotseat();
+        }
+
+        private static string[] BuildNicks()
+        {
+            var nicks = new string[SeatCount];
+            for (var i = 0; i < SeatCount; i++)
+            {
+                nicks[i] = "P" + i;
+            }
+
+            return nicks;
+        }
+
         private void ReleaseHand()
         {
             if (View == null)
@@ -636,23 +680,5 @@ namespace Backend.Object.UI
             return !string.IsNullOrEmpty(defId) && defId[defId.Length - 1] == rank;
         }
 
-        private static string FormatResult(MatchEndView result)
-        {
-            if (result == null || result.ranks == null)
-            {
-                return "종료";
-            }
-
-            var lines = new string[result.ranks.Length];
-            for (var seat = 0; seat < result.ranks.Length; seat++)
-            {
-                var rank = result.ranks[seat];
-                var count = result.handCounts != null && seat < result.handCounts.Length ? result.handCounts[seat] : 0;
-                var score = result.scores != null && seat < result.scores.Length ? result.scores[seat] : 0;
-                lines[seat] = $"P{seat} {rank}위 장수{count} 점수{score}";
-            }
-
-            return string.Join("\n", lines);
-        }
     }
 }
