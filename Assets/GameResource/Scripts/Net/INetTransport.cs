@@ -3,7 +3,7 @@ using System;
 namespace Backend.Net
 {
     /// <summary>
-    /// 커맨드를 보내고 이벤트를 받는 전송. WSS 구현은 이후 스텝, 지금은 LocalLoopback.
+        /// 커맨드를 보내고 이벤트를 받는 전송. LocalLoopback 또는 <see cref="WsNetClient"/>.
     /// </summary>
     public interface INetTransport
     {

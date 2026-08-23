@@ -22,6 +22,7 @@ namespace Backend.Net
         public string quickId;
         public string channel;
         public bool rematchYes;
+        public string roomCode;
 
         /// <summary>버전을 담은 Ready 커맨드를 만든다.</summary>
         public static CommandMessage Ready(int seq, int seat)
