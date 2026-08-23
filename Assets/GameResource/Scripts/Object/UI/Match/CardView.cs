@@ -1,19 +1,22 @@
 using System;
+using System.Collections.Generic;
 using Backend.App;
+using Backend.Object.Management;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Backend.Object.UI
 {
     /// <summary>
-    /// 더미 테이블용 사각형 카드 플레이스홀더.
-    /// 앞면은 defId 텍스트, 뒷면은 장수. 수는 판결하지 않는다.
+    /// 내 손패·공개 discardTop 은 Addressable 앞면 스프라이트.
+    /// 상대 손패는 뒷면+장수만 보여 앞면을 붙이지 않는다.
     /// </summary>
     public sealed class CardView : UIView
     {
         /// <summary>기획서 §8 선택 시 위로 올리는 픽셀.</summary>
         public const float SelectedLift = 16f;
 
+        private static readonly Dictionary<string, Sprite> SpriteCache = new Dictionary<string, Sprite>();
         private static readonly Color FrontTint = new Color(0.93f, 0.9f, 0.82f, 1f);
         private static readonly Color BackTint = new Color(0.22f, 0.28f, 0.4f, 1f);
         private static readonly Color SuitBlack = new Color(0.18f, 0.18f, 0.2f, 1f);
@@ -126,24 +129,23 @@ namespace Backend.Object.UI
         {
             InstanceId = instanceId;
             DefId = defId;
-            _fill.color = FrontColor(defId);
-            _label.text = string.IsNullOrEmpty(defId) ? "?" : defId;
-            _label.color = FrontLabelColor(defId);
+            var sprite = LoadCardSprite(CardArtKeys.FrontAddress(defId));
+            var fallback = string.IsNullOrEmpty(defId) ? "?" : defId;
+            ApplySprite(sprite, FrontColor(defId), fallback, FrontLabelColor(defId), sprite == null);
             SetInteractable(true);
             SetLegal(true);
             SetSelected(selected);
         }
 
         /// <summary>
-        /// 상대 뒷면 플레이스홀더. 장수만 표시한다.
+        /// 상대·덱 뒷면. 앞면 스프라이트는 붙이지 않고 장수만 표시한다.
         /// </summary>
         public void BindBack(int count)
         {
             InstanceId = -1;
             DefId = null;
-            _fill.color = BackTint;
-            _label.text = count.ToString();
-            _label.color = Color.white;
+            var sprite = LoadCardSprite(CardArtKeys.BackAddress());
+            ApplySprite(sprite, BackTint, count.ToString(), Color.white, true);
             SetLegal(true);
             SetInteractable(false);
             SetSelected(false);
@@ -205,6 +207,44 @@ namespace Backend.Object.UI
         private void HandleClick()
         {
             Clicked?.Invoke(this);
+        }
+
+        private void ApplySprite(Sprite sprite, Color fallbackTint, string label, Color labelColor, bool showLabel)
+        {
+            if (_fill != null)
+            {
+                _fill.sprite = sprite;
+                _fill.color = sprite != null ? Color.white : fallbackTint;
+                _fill.preserveAspect = sprite != null;
+            }
+
+            if (_label != null)
+            {
+                _label.enabled = showLabel;
+                _label.text = label;
+                _label.color = labelColor;
+            }
+        }
+
+        private static Sprite LoadCardSprite(string address)
+        {
+            if (string.IsNullOrEmpty(address) || GameStateUtil.IsQuitting)
+            {
+                return null;
+            }
+
+            if (SpriteCache.TryGetValue(address, out var cached) && cached != null)
+            {
+                return cached;
+            }
+
+            var sprite = ResourceManager.LoadResource<Sprite>(address);
+            if (sprite != null)
+            {
+                SpriteCache[address] = sprite;
+            }
+
+            return sprite;
         }
 
         private static Color FrontColor(string defId)
