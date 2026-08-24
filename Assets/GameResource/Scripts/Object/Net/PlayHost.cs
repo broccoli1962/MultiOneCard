@@ -50,6 +50,7 @@ namespace Backend.Object.Net
             var seed = UnityEngine.Random.Range(1, int.MaxValue);
             _runtime = new MatchRuntime(seats, seed, roomCode, hostSeat: 0, connectAllSeats: false);
             _loopback = new LocalLoopback(_runtime);
+            _loopback.AfterDeliver = BroadcastToRemotes;
             _hostClient = _loopback.CreateClient(0);
             _loopback.Publish(_runtime.SetNick(0, _nick, NowMs()));
             return _hostClient;
@@ -252,7 +253,17 @@ namespace Backend.Object.Net
                 return;
             }
 
+            // 로컬 루프백 + AfterDeliver(원격 브로드캐스트)
             _loopback?.Publish(events);
+        }
+
+        private void BroadcastToRemotes(IReadOnlyList<EventMessage> events)
+        {
+            if (_nm == null || events == null || events.Count == 0)
+            {
+                return;
+            }
+
             foreach (var pair in _seatByClient)
             {
                 if (pair.Key == _nm.LocalClientId)

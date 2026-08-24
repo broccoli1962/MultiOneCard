@@ -15,6 +15,9 @@ namespace Backend.App
         private readonly Func<long> _nowMs;
         private readonly Dictionary<int, LoopbackLink> _links = new Dictionary<int, LoopbackLink>();
 
+        /// <summary>로컬 분배 뒤 원격 게스트에게도 같은 이벤트를 보낼 때 쓴다.</summary>
+        public Action<IReadOnlyList<EventMessage>> AfterDeliver { get; set; }
+
         /// <summary>이미 열린 매치 호스트에 루프백을 붙인다.</summary>
         public LocalLoopback(MatchRuntime runtime, Func<long> nowMs = null)
         {
@@ -60,6 +63,12 @@ namespace Backend.App
         public void Pump(long nowMs)
         {
             DeliverAll(_runtime.Pump(nowMs));
+        }
+
+        /// <summary>이미 나온 이벤트를 접속 좌석에 분배한다. 원격 호스트가 쓴다.</summary>
+        public void Publish(IReadOnlyList<EventMessage> events)
+        {
+            DeliverAll(events);
         }
 
         /// <summary>기획서 §6 SnapshotRequest 를 호스트에 넣어 재접속 스냅샷을 보낸다.</summary>
@@ -150,25 +159,30 @@ namespace Backend.App
 
         private void DeliverAll(IReadOnlyList<EventMessage> events)
         {
-            if (events == null || events.Count == 0 || _links.Count == 0)
+            if (events == null || events.Count == 0)
             {
                 return;
             }
 
-            foreach (var pair in _links)
+            if (_links.Count > 0)
             {
-                var link = pair.Value;
-                if (!link.IsConnected)
+                foreach (var pair in _links)
                 {
-                    continue;
-                }
+                    var link = pair.Value;
+                    if (!link.IsConnected)
+                    {
+                        continue;
+                    }
 
-                var visible = MatchRuntime.EventsForSeat(events, link.Seat);
-                for (var i = 0; i < visible.Length; i++)
-                {
-                    link.Push(visible[i]);
+                    var visible = MatchRuntime.EventsForSeat(events, link.Seat);
+                    for (var i = 0; i < visible.Length; i++)
+                    {
+                        link.Push(visible[i]);
+                    }
                 }
             }
+
+            AfterDeliver?.Invoke(events);
         }
 
         private long NowMs()
