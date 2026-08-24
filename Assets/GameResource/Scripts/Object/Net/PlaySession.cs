@@ -175,6 +175,7 @@ namespace Backend.Object.Net
             var transport = _root.AddComponent<UnityTransport>();
             _nm = _root.AddComponent<NetworkManager>();
             _nm.SetSingleton();
+            _nm.RunInBackground = true;
             if (_nm.NetworkConfig == null)
             {
                 _nm.NetworkConfig = new NetworkConfig();

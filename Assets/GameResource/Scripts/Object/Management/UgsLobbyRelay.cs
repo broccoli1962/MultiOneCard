@@ -52,10 +52,35 @@ namespace Backend.Object.Management
                     "Authentication을 사용할 수 없습니다. Dashboard에서 Player Authentication(Anonymous)을 활성화하세요");
             }
 
+            // 같은 PC에서 에디터+빌드·빌드 2개를 켜면 PlayerPrefs 세션을 공유해
+            // 동일 플레이어로 로비에 두 번 들어가 실패한다. 프로세스별 프로필로 분리한다.
+            EnsureProcessAuthProfile(auth);
+
             if (!auth.IsSignedIn)
             {
                 await auth.SignInAnonymouslyAsync();
             }
+        }
+
+        private static void EnsureProcessAuthProfile(IAuthenticationService auth)
+        {
+            var profile = "p" + System.Diagnostics.Process.GetCurrentProcess().Id;
+            if (profile.Length > 30)
+            {
+                profile = profile.Substring(0, 30);
+            }
+
+            if (string.Equals(auth.Profile, profile, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (auth.IsSignedIn)
+            {
+                auth.SignOut();
+            }
+
+            auth.SwitchProfile(profile);
         }
 
         private static IMultiplayerService RequireMultiplayer()
@@ -71,20 +96,9 @@ namespace Backend.Object.Management
         }
 
         /// <summary>
-        /// 모바일 반송망에서 UDP/DTLS 가 막히는 경우가 많아 WSS 를 쓴다.
-        /// PC·에디터는 DTLS(Default).
+        /// PC·모바일 모두 WSS. DTLS/UDP 가 막힌 망에서도 PC끼리·모바일 호스트가 붙기 쉽다.
         /// </summary>
-        private static RelayProtocol PreferredRelayProtocol
-        {
-            get
-            {
-#if UNITY_ANDROID || UNITY_IOS
-                return RelayProtocol.WSS;
-#else
-                return RelayProtocol.Default;
-#endif
-            }
-        }
+        private static RelayProtocol PreferredRelayProtocol => RelayProtocol.WSS;
 
         private static SessionOptions BuildHostOptions(int seats, ApplyRelayHandler handler)
         {
@@ -153,7 +167,7 @@ namespace Backend.Object.Management
         public static async Task<JoinedRelay> JoinAsync(string joinCode, UnityTransport transport)
         {
             await EnsureSignedInAsync();
-            var code = joinCode != null ? joinCode.Trim() : string.Empty;
+            var code = joinCode != null ? joinCode.Trim().ToUpperInvariant() : string.Empty;
             if (code.Length == 0)
             {
                 throw new InvalidOperationException("방을 찾을 수 없음");
