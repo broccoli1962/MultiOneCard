@@ -266,10 +266,9 @@ namespace Backend.Object.Management
                     throw new InvalidOperationException("Relay 네트워크 설정이 비어 있습니다");
                 }
 
-                var data = configuration.Role == NetworkRole.Client
-                    ? configuration.RelayClientData
-                    : configuration.RelayServerData;
-                _transport.SetRelayServerData(data);
+                // NGO 경로에서는 호스트·클라 모두 RelayServerData 에 할당이 들어간다.
+                // RelayClientData 는 Entities 전용이라 비어 있을 수 있다.
+                _transport.SetRelayServerData(configuration.RelayServerData);
                 return Task.CompletedTask;
             }
 
