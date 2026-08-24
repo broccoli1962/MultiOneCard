@@ -25,6 +25,9 @@ namespace Backend.Object.Net
         /// <summary>방장 루프백 클라. 게스트면 null.</summary>
         public static NetClient HostClient => _host != null ? _host.HostClient : null;
 
+        /// <summary>현재 PlaySession NetworkManager. Singleton 과 다를 수 있어 전송은 이쪽을 쓴다.</summary>
+        public static NetworkManager Network => _nm;
+
         /// <summary>게스트 전송.</summary>
         public static PlayClientTransport GuestTransport => _guest;
 
@@ -119,11 +122,13 @@ namespace Backend.Object.Net
             _host?.Shutdown();
             _guest = null;
             _host = null;
+            var root = _root;
+            _root = null;
             _nm = null;
-            if (_root != null)
+            if (root != null)
             {
-                UnityEngine.Object.Destroy(_root);
-                _root = null;
+                // Destroy 지연이면 다음 EnsureNetwork 의 Singleton 이 옛 인스턴스를 가리킨다.
+                UnityEngine.Object.DestroyImmediate(root);
             }
         }
 
@@ -151,10 +156,25 @@ namespace Backend.Object.Net
 
         private static void EnsureNetwork(string nick)
         {
+            if (NetworkManager.Singleton != null)
+            {
+                var stale = NetworkManager.Singleton;
+                if (stale.IsListening)
+                {
+                    stale.Shutdown();
+                }
+
+                if (stale.gameObject != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(stale.gameObject);
+                }
+            }
+
             _root = new GameObject("PlaySession");
             UnityEngine.Object.DontDestroyOnLoad(_root);
             var transport = _root.AddComponent<UnityTransport>();
             _nm = _root.AddComponent<NetworkManager>();
+            _nm.SetSingleton();
             if (_nm.NetworkConfig == null)
             {
                 _nm.NetworkConfig = new NetworkConfig();

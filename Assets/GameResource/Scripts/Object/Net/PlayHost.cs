@@ -172,8 +172,9 @@ namespace Backend.Object.Net
             NetworkManager.ConnectionApprovalResponse response)
         {
             response.CreatePlayerObject = false;
-            var taken = _nm.ConnectedClientsIds != null ? _nm.ConnectedClientsIds.Count : 0;
             var cap = _runtime != null ? _runtime.SeatCount : SessionLimits.MaxPlayers;
+            // ConnectedClientsIds 는 승인 중에 연결 중 클라를 이미 넣을 수 있어 좌석 맵으로 본다.
+            var taken = _seatByClient.Count;
             response.Approved = taken < cap && cap <= SessionLimits.MaxPlayers;
             if (!response.Approved)
             {

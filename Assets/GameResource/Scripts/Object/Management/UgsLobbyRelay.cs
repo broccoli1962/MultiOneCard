@@ -71,6 +71,46 @@ namespace Backend.Object.Management
         }
 
         /// <summary>
+        /// 모바일 반송망에서 UDP/DTLS 가 막히는 경우가 많아 WSS 를 쓴다.
+        /// PC·에디터는 DTLS(Default).
+        /// </summary>
+        private static RelayProtocol PreferredRelayProtocol
+        {
+            get
+            {
+#if UNITY_ANDROID || UNITY_IOS
+                return RelayProtocol.WSS;
+#else
+                return RelayProtocol.Default;
+#endif
+            }
+        }
+
+        private static SessionOptions BuildHostOptions(int seats, ApplyRelayHandler handler)
+        {
+            return new SessionOptions
+                {
+                    MaxPlayers = seats,
+                    IsPrivate = false,
+                    Type = SessionType,
+                    SessionProperties = new Dictionary<string, SessionProperty>
+                    {
+                        { DataSeats, new SessionProperty(seats.ToString()) },
+                    },
+                }
+                .WithRelayNetwork()
+                .WithNetworkOptions(new NetworkOptions { RelayProtocol = PreferredRelayProtocol })
+                .WithNetworkHandler(handler);
+        }
+
+        private static JoinSessionOptions BuildJoinOptions(ApplyRelayHandler handler)
+        {
+            return new JoinSessionOptions { Type = SessionType }
+                .WithNetworkOptions(new NetworkOptions { RelayProtocol = PreferredRelayProtocol })
+                .WithNetworkHandler(handler);
+        }
+
+        /// <summary>
         /// 세션과 Relay 할당을 만든다. 동시 호스트는 <see cref="SessionLimits.MaxHostedSessions"/> 를 넘지 못한다.
         /// 반환의 <see cref="HostedRelay.Code"/> 가 게스트가 입력할 Unity 조인 코드다.
         /// </summary>
@@ -84,17 +124,7 @@ namespace Backend.Object.Management
 
             var seats = SessionLimits.ClampPlayers(seatCount);
             var handler = new ApplyRelayHandler(transport);
-            var options = new SessionOptions
-            {
-                MaxPlayers = seats,
-                IsPrivate = false,
-                Type = SessionType,
-                SessionProperties = new Dictionary<string, SessionProperty>
-                {
-                    { DataSeats, new SessionProperty(seats.ToString()) },
-                },
-            }.WithRelayNetwork().WithNetworkHandler(handler);
-            var session = await RequireMultiplayer().CreateSessionAsync(options);
+            var session = await RequireMultiplayer().CreateSessionAsync(BuildHostOptions(seats, handler));
             if (session == null)
             {
                 throw new InvalidOperationException("Relay 세션을 만들지 못함");
@@ -133,12 +163,17 @@ namespace Backend.Object.Management
             ISession session;
             try
             {
-                session = await RequireMultiplayer().JoinSessionByCodeAsync(
-                    code,
-                    new JoinSessionOptions { Type = SessionType }.WithNetworkHandler(handler));
+                session = await RequireMultiplayer().JoinSessionByCodeAsync(code, BuildJoinOptions(handler));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                var detail = e.Message ?? string.Empty;
+                if (detail.IndexOf("Cloud", StringComparison.OrdinalIgnoreCase) >= 0
+                    || detail.IndexOf("Authentication", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    throw;
+                }
+
                 throw new InvalidOperationException("방을 찾을 수 없음");
             }
 
@@ -268,7 +303,9 @@ namespace Backend.Object.Management
 
                 // NGO 경로에서는 호스트·클라 모두 RelayServerData 에 할당이 들어간다.
                 // RelayClientData 는 Entities 전용이라 비어 있을 수 있다.
-                _transport.SetRelayServerData(configuration.RelayServerData);
+                var data = configuration.RelayServerData;
+                _transport.UseWebSockets = data.IsWebSocket != 0;
+                _transport.SetRelayServerData(data);
                 return Task.CompletedTask;
             }
 
