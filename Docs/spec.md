@@ -21,8 +21,8 @@
 | 층 | 선택 |
 |----|------|
 | 엔진 | Unity 6000.3, URP 2D, Input System, TextMeshPro, uGUI, Addressables, UniTask, R3, LitMotion |
-| 권한 | 순수 C# `Game.Rules` + 인프로세스 `MatchRuntime` → 이후 `server/` .NET 8 + WSS |
-| 전송 | JSON over WSS. NGO 오브젝트 싱크 사용 금지 |
+| 권한 | 순수 C# `Game.Rules` + NGO 호스트 `MatchRuntime` (릴레이·LAN) |
+| 전송 | JSON over NGO Custom Messaging. NGO 오브젝트 싱크 사용 금지 |
 | 인증 | MVP는 익명 `accountId` + 닉 2~12자 |
 
 기존 인프라를 다시 만들지 말 것.
@@ -49,7 +49,6 @@ Assets/GameResource/Scripts/
 Assets/GameResource/Data/Cards/
 Assets/GameResource/Prefab/UI/
 Assets/Tests/EditMode/     # Game.Rules 참조
-server/                    # .NET 8 Gateway + Lobby + MatchWorker (Assets 밖)
 ```
 
 화면은 씬을 늘리지 않고 패널로 연다: Title, Lobby, Room, Match, Result, HowTo, Settings. 기존 `GameState`(Ready/Playing/GameOver/StageClear)는 템플릿 잔재 — 매치 phase는 `Waiting | Starting | InMatch | Result` 로 둔다.
@@ -76,15 +75,15 @@ server/                    # .NET 8 Gateway + Lobby + MatchWorker (Assets 밖)
 
 ### 기본 수
 
-버림 top과 **같은 무늬 또는 같은 랭크**. 조커·무색은 알약 락이 없으면 아무 위에도 가능. 합법 수가 있어도 드로우 허용. `DrawAndPlay=true`면 드로우 장을 같은 턴에 낼 수 있다. 한 턴 1장. 예외는 K.
+버림 top과 **같은 무늬 또는 같은 랭크**. 무색은 알약 락이 없으면 아무 위에도 가능. **조커 3종은 와일드가 아니다** — 흑(`JOKER:BW`)·적(`JOKER:COLOR`)·청(`JOKER:MOON`)은 테이블 색(알약 락 → 7 지정 무늬 → 버림 top 색)이 **본인 색일 때만**. 버림이 무색이면 조커 불가. 합법 수가 있어도 드로우 허용. Official은 1장 뽑고 **턴을 넘긴다**(뽑은 장이 합법이어도 같은 턴에 불가). 커스텀 `DrawAndPlay=true`만 드로우 장을 같은 턴에 낼 수 있다. 한 턴 1장. 예외는 K.
 
 ### 합법 함수 (클라 힌트 = 서버와 동일 코드, 판정은 서버만)
 
-- 공격 응답: PASS, COUNTER, SPEAR, (죽창 없으면) 3·4, 또는 공격 카드(2/A/조커).
-- Q 응답: Q 또는 3·4.
-- `requiredColor` 있으면: 그 색 문양, 또는 같은 색 알약. 조커·다른 무색 불가.
-- 그 외: wild/무색, 또는 7, 또는 top이 wild이고 `requiredSuit==null`이면 아무 장, 아니면 suit==required 또는 rank==top.rank.
-- 7 이후 `requiredSuit`가 지정값. 다음 수: 그 무늬 또는 7 또는 wild(락 없을 때).
+- 공격 응답: PASS, COUNTER, SPEAR, (죽창 없으면) **같은 문양** 3·4, 또는 공격 카드(2/A/조커). **2·A 이어가기는 같은 랭크만**(색·문양 무관. 달A→별2·다이아2→하트A 불가, 클로버A→하트A 가능). 조커 위 2·A·조커는 테이블 색과 본인 색이 같을 때만(버림이 무색이면 색 제한 없음). 3·4는 색이 같아도 문양이 다르면 불가(별2→달3 불가). 조커 공격은 `JokerDefendable`이면 같은 색 3·4로 방어.
+- Q 응답: Q, 또는 **같은 문양** 3·4.
+- `requiredColor` 있으면: 그 색 문양, 같은 색 조커, 또는 같은 색 알약. 다른 무색 불가.
+- 그 외: 무색 wild, 또는 본인 색 조커. 7은 와일드가 아니며 **다른 랭크 위**에서는 테이블 색과 본인 색이 같을 때만 무늬·랭크 매칭. **7 위 7은 색 무관**. 버림 top이 색 있는 조커면 그 색 문양·같은 색 조커·알약만(다른 색 문양 불가). top이 무색 wild이고 `requiredSuit==null`이면 아무 장. 아니면 suit==required 또는 rank==top.rank.
+- 7 이후 `requiredSuit`가 지정값. 다음 수: 그 무늬, 또는 그 색의 7, 또는 무색 wild, 또는 그 무늬 색의 조커(락 없을 때).
 
 소유·턴 검사 후 accept. 마지막 장이 합법이면 **공격·Q·K여도 피니시**. 손패 0이면 효과는 적용하지 않고 1위.
 
@@ -93,11 +92,11 @@ server/                    # .NET 8 Gateway + Lobby + MatchWorker (Assets 밖)
 | 카드 | 효과 |
 |------|------|
 | 2 / A | 공격 +2 / +3. 여섯 문양 동일 |
-| 조커 3종 | 와일드 공격. 값은 `jokerAttack` |
-| 3 · 4 | 공격 또는 Q 응답에서만 스택 0. 평소는 일반. 죽창 섞이면 불법 |
+| 조커 3종 | 본인 색일 때만 내는 공격. 값은 `jokerAttack` |
+| 3 · 4 | 공격 응답에서만 스택 0. **같은 문양만**. 평소는 일반. 죽창 섞이면 불법. Q Give는 방어 불가 |
 | 7 | 내고 6문양 지정. 초과 시 낸 7의 원래 무늬 |
 | J | 다음 활성 1명 스킵 |
-| Q | Reverse(방향 반전. 2인이면 상대 스킵) 또는 Give(`queenStack=1`). 초과=Reverse. 마지막 Q면 효과 없음 |
+| Q | Reverse(방향 반전 후 다음 활성) 또는 Give(다음 활성에게 손패 1장. 낸 사람이 고름). 방어·중첩 없음. 초과=Reverse. 마지막 Q면 효과 없음 |
 | K | Extra(K 기준 합법 1장 더. 특수는 정상 발동. 또 K면 재선택) 또는 Hide(아무 1장을 K 밑, 효과 없음, 앞면 비공개). 초과=K만 내고 종료. 숨길 장 없으면 Hide 불가 |
 
 ### 무색 특수
@@ -115,15 +114,15 @@ server/                    # .NET 8 Gateway + Lobby + MatchWorker (Assets 밖)
 
 ### 공격 / Q 체인
 
-동시에 열리지 않음. 공격 응답: 전이 / 패스 / 역날검 / 방어(3·4) / 감수(스택 전부 드로우, 추가 수 없음). Q 응답: Q 전이(`queenStack+=1`) / 3·4 / 감수. 감수 시 **마지막 Q 좌석**이 남은 손패에서 `queenStack`장 지급(부족분은 덱). 지급 후 0장이면 1위.
+동시에 열리지 않음. 공격 응답: 전이 / 패스 / 역날검 / 방어(3·4) / 감수(스택 전부 드로우, 추가 수 없음). Q Give는 응답 없이 낸 사람이 손패 1장을 다음 활성에게 준다(부족분은 덱). 지급 후 0장이면 1위, 아니면 받은 좌석 턴.
 
 ### 승패 · 활성 · AFK
 
-손패 0 = 즉시 1위(잔여 순위전 없음). 나머지는 장수 오름차순, 동률은 점수 낮은 쪽. 기권은 최하위. 빠진 자리는 건너뜀.
+손패 0 = 즉시 1위(잔여 순위전 없음). 나머지는 장수 오름차순, 동률은 점수 낮은 쪽. 기권은 최하위. 빠진 자리는 건너뜀. **손패 20장 이상 = 파산(기권과 동일: 활성 제외·순위 최하위, 손패는 버림에 넣음).**
 
-초과: 일반=드로우1, 공격=스택 전부, Q선택=Reverse, Q응답=감수, Q지급=점수 높은 순, K선택=K만, K숨김=점수 낮은 1장, 7=원래 무늬, 미러 버림=점수 높은 순. **연속 타임아웃 3회=기권**.
+초과: 일반=드로우1, 공격=스택 전부, Q선택=Reverse, Q지급=점수 높은 1장, K선택=K만, K숨김=점수 낮은 1장, 7=원래 무늬, 미러 버림=점수 높은 순. **연속 타임아웃 3회=기권**.
 
-재접속 45초. 스냅샷: 공개 상태 + 내 손패 + 채팅 최근 50 + 남은 턴. 초과=기권. 손패는 버림에 넣지 않고 매치에서 제거.
+재접속 45초. 스냅샷: 공개 상태 + 내 손패 + 채팅 최근 50 + 남은 턴. 초과=기권(손패는 버림에 넣음).
 
 하우스룰(커스텀만): `DrawAndPlay=true`, `JokerDefendable=true`, `ContinueAfterFirstWin=false`, `TurnSeconds=15`. 퀵매치는 항상 Official.
 
@@ -131,7 +130,7 @@ server/                    # .NET 8 Gateway + Lobby + MatchWorker (Assets 밖)
 
 ## 6. 커맨드 / 이벤트
 
-클라→서버: Ready, StartMatch, PlayCard(instanceId), Draw, ChooseSuit, ChooseQueenMode(Reverse|Give), AcceptQueen, GiveCards, ChooseKingMode(Extra|Hide), HideUnder, MirrorDiscard, Surrender, Chat, RematchVote, Heartbeat, SnapshotRequest.
+클라→서버: Ready, StartMatch, PlayCard(instanceId), Draw, ChooseSuit, ChooseQueenMode(Reverse|Give), GiveCards, ChooseKingMode(Extra|Hide), HideUnder, MirrorDiscard, Surrender, Chat, RematchVote, Heartbeat, SnapshotRequest.
 
 공개 이벤트: RoomUpdated, MatchStarted, TurnChanged, CardPlayed, DrewCount, QueenModeChosen, QueenGiven, KingModeChosen, KingHidden, JokerValues, ColorLock, MirrorAdjusted(장수만), SuitChanged, PlayerDisconnected/Rejoined/Out, Chat, MatchEnded.
 
@@ -145,17 +144,17 @@ MVP는 ack 후 연출(예측 없음). 연출 캡 800ms. 타이머는 서버 `dea
 
 게스트 인증 → 로비: 퀵매치 2/4/6, 방 만들기, 6자리 룸코드. 봇 충원 없음. 90초 후 인원 하향 제안. 대기실: 준비, 방장 Start, 인원≥2. 시작 후 난입 없음.
 
-결과: 순위·장수·점수, 재대결 20초(미투표=반대). 방 유지 후 대기실.
+결과: 순위·장수·점수, 재대결 20초(미투표=반대). **전원 찬성 시 즉시 새 판**. 반대·미투표가 있으면 방 유지 후 대기실.
 
 프로토콜: `protocolMajor.minor`. major 불일치 접속 거부. MVP는 minor 달라도 룸코드 거부. 리전 `ap-northeast` 단일.
 
 ## 8. UI / 입력
 
-조작은 **2단 확정**(선택 → 같은 카드 재탭/재클릭 또는 Enter). 드래그 앤 드롭은 PC 옵션이고 최종은 PlayCard 하나.
+조작은 **드래그 내기**(손패를 테이블 쪽으로 끌어 놓으면 PlayCard). 탭은 미리보기·선택만. Enter는 선택한 장을 낸다. Q 지급·미러는 탭으로 한 장씩 고른 뒤 시트 확정. 해제는 Esc/우클릭/빈곳.
 
-모든 게임 입력은 `GamePointer`로 모은다. 모바일=탭/재탭, PC=클릭/Enter, 해제는 Esc/우클릭/빈곳. 드로우=덱 또는 D. 문양=6버튼 또는 S/H/D/C/R/M. Q=R/G, K=E/H. 퀵챗=F1~F8.
+모든 게임 입력은 `GamePointer`로 모은다. 모바일=드래그/탭, PC=드래그/Enter, 해제는 Esc/우클릭/빈곳. 드로우=덱 또는 D. 문양=6버튼 또는 S/H/D/C/R/M. Q=R/G, K=E/H. 퀵챗=F1~F8.
 
-합법=밝기 100%, 불법=투명 40%·선택 불가, 선택=+16px, ack까지 입력 잠금, REJECT=손 복귀. 공격 중 감수 버튼 라벨=`받기 (n장)`. HUD: 턴/초/방향, 요구 무늬, +n 스택, Q×n, 조커값 `흑n 빨n 파n`, 알약 뱃지, 덱 장수. 기권은 두 번 확인.
+합법=밝기 100%, 불법=투명 40%·선택 불가, 선택=+16px, ack까지 입력 잠금, REJECT=손 복귀. 손패는 부채꼴(하단 피벗, 좌→우 겹침, 좌상단 인덱스 노출). 카드를 올리면 **왼쪽 미리보기**에 전체 장을 보여 준다. 드로우 버튼은 **덱 오른쪽**, 기권은 **오른쪽 상단**(가장자리와 간격). HUD 텍스트는 낼 좌석·최근 카드·남은 초·방향만. 조커 위계는 **오른쪽 아래 반원 레버**(흑·적·청 중 공격값 최대 쪽으로 이동). 공격 중 감수 버튼 라벨=`받기 (n장)`. 기권은 두 번 확인.
 
 레이아웃 프리셋은 OS가 아니라 해상도: `MobilePortrait`(1080×1920), `MobileLandscape`, `PcLandscape`(1920×1080). Safe Area 안에 손패. 2~4인 십자, 5~6인 상단 아크.
 

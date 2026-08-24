@@ -72,10 +72,242 @@ namespace Game.Rules.Tests
         {
             var state = Table(2);
             SetDiscardTop(state, "C6");
-            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H7")), Is.False);
             Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdSpear)), Is.True);
-            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerMoon)), Is.False);
             Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdPass)), Is.False);
+        }
+
+        [Test]
+        public void LegalMove_Seven_OnlyOwnColor()
+        {
+            var state = Table(2);
+            SetDiscardTop(state, "R4");
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C7")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S7")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("M7")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H7")), Is.False);
+        }
+
+        [Test]
+        public void LegalMove_Jokers_OnlyOwnColor()
+        {
+            var state = Table(2);
+            SetDiscardTop(state, "C6");
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerMoon)), Is.False);
+
+            SetDiscardTop(state, "H6");
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerMoon)), Is.False);
+
+            SetDiscardTop(state, "R6");
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerMoon)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+
+            SetDiscardTop(state, CardCatalog.IdSpear);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerMoon)), Is.False);
+        }
+
+        [Test]
+        public void LegalMove_JokerOnTop_LocksOwnColorSuits()
+        {
+            var state = Table(2);
+            SetDiscardTop(state, CardCatalog.IdJokerBw);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S8")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C5")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H8")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H7")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdSpear)), Is.False);
+        }
+
+        [Test]
+        public void PlayCard_BlackJoker_AcceptAttack_NextTurnColorLocked()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, CardCatalog.IdJokerBw, "H8", "S6");
+            LeaveOnly(state, 1, "H9");
+            SetDiscardTop(state, "C5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, CardCatalog.IdJokerBw)));
+            Assert.That(state.AttackStack, Is.GreaterThan(0));
+            AssertAccepted(RuleEngine.DrawCard(state, 1));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+            Assert.That(state.DiscardTop.Def.Id, Is.EqualTo(CardCatalog.IdJokerBw));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S6")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H8")), Is.False);
+            AssertRejected(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "H8")), RejectCode.IllegalCard);
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S6")));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_JokerMustMatchColor()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "S2", "S6");
+            LeaveOnly(state, 1, CardCatalog.IdJokerBw, CardCatalog.IdJokerColor, "H3");
+            SetDiscardTop(state, "S9");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S2")));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerBw)), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef(CardCatalog.IdJokerColor)), Is.False);
+            AssertRejected(
+                RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdJokerColor)),
+                RejectCode.NotAttackResponse);
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_TwoMustMatchJokerColor()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, CardCatalog.IdJokerMoon, "M6");
+            LeaveOnly(state, 1, "S2", "R2", "H3");
+            SetDiscardTop(state, "R5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, CardCatalog.IdJokerMoon)));
+            Assert.That(state.AttackStack, Is.GreaterThan(0));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S2")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R2")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "S2")), RejectCode.NotAttackResponse);
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "R2")));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_SameRankStacks_AcrossColor()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "CA", "C6");
+            LeaveOnly(state, 1, "HA", "H2", "MA");
+            SetDiscardTop(state, "C5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "CA")));
+            Assert.That(state.AttackDefendRank, Is.EqualTo(Rank.Ace));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H2")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("HA")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("MA")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H2")), RejectCode.NotAttackResponse);
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "HA")));
+            Assert.That(state.AttackStack, Is.EqualTo(CardCatalog.AttackAce * 2));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_DifferentRankSameColor_Rejects()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "MA", "M6");
+            LeaveOnly(state, 1, "R2", "RA", "H8");
+            SetDiscardTop(state, "M5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "MA")));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R2")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("RA")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "R2")), RejectCode.NotAttackResponse);
+
+            var state2 = Table(2);
+            LeaveOnly(state2, 0, "D2", "D6");
+            LeaveOnly(state2, 1, "HA", "H2");
+            SetDiscardTop(state2, "D5");
+            AssertAccepted(RuleEngine.PlayCard(state2, 0, IdInHand(state2, 0, "D2")));
+            Assert.That(LegalMove.CanPlay(state2, state2.Catalog.GetDef("HA")), Is.False);
+            Assert.That(LegalMove.CanPlay(state2, state2.Catalog.GetDef("H2")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state2, 1, IdInHand(state2, 1, "HA")), RejectCode.NotAttackResponse);
+        }
+
+        [Test]
+        public void LegalMove_SevenOnSeven_AllowsAnyColor()
+        {
+            var state = Table(2);
+            SetDiscardTop(state, "S7");
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R7")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H8")), Is.False);
+            LeaveOnly(state, 0, "H7", "H8");
+            state.CurrentSeat = 0;
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "H7")));
+            Assert.That(state.PendingSuitSeat, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_ThreeFour_DefendsJokerSameColor()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, CardCatalog.IdJokerMoon, "H8");
+            LeaveOnly(state, 1, "S3", "C4", "R3", "M4");
+            SetDiscardTop(state, "R5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, CardCatalog.IdJokerMoon)));
+            Assert.That(state.AttackDefendColor, Is.EqualTo(ColorGroup.Blue));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S3")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C4")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R3")), Is.True);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("M4")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "S3")), RejectCode.NotAttackResponse);
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "R3")));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_ThreeFour_AfterPass_KeepsDefendSuit()
+        {
+            var state = Table(3);
+            LeaveOnly(state, 0, "S2", "S6");
+            LeaveOnly(state, 1, CardCatalog.IdPass, "H8");
+            LeaveOnly(state, 2, "S3", "H3", "C4");
+            SetDiscardTop(state, "S5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S2")));
+            Assert.That(state.AttackDefendSuit, Is.EqualTo(Suit.Spade));
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdPass)));
+            Assert.That(state.AttackStack, Is.EqualTo(CardCatalog.AttackTwo));
+            Assert.That(state.AttackDefendSuit, Is.EqualTo(Suit.Spade));
+            Assert.That(state.CurrentSeat, Is.EqualTo(2));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H3")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C4")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S3")), Is.True);
+            AssertAccepted(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "S3")));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_ThreeFour_AfterPass_KeepsJokerDefendColor()
+        {
+            var state = Table(3);
+            LeaveOnly(state, 0, CardCatalog.IdJokerBw, "S6");
+            LeaveOnly(state, 1, CardCatalog.IdPass, "H8");
+            LeaveOnly(state, 2, "S3", "H3", "R4");
+            SetDiscardTop(state, "S5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, CardCatalog.IdJokerBw)));
+            Assert.That(state.AttackDefendColor, Is.EqualTo(ColorGroup.Black));
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdPass)));
+            Assert.That(state.AttackDefendColor, Is.EqualTo(ColorGroup.Black));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H3")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R4")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("S3")), Is.True);
+            AssertAccepted(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "S3")));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void LegalMove_AttackResponse_StarTwo_RejectsMoonThree()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "R2", "R6");
+            LeaveOnly(state, 1, "M3", "H3", "R3");
+            SetDiscardTop(state, "R9");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "R2")));
+            Assert.That(state.AttackStack, Is.EqualTo(CardCatalog.AttackTwo));
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("M3")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H3")), Is.False);
+            Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("R3")), Is.True);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "M3")), RejectCode.NotAttackResponse);
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "R3")));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
         }
 
         [Test]
@@ -83,12 +315,12 @@ namespace Game.Rules.Tests
         {
             var state = Table(2);
             LeaveOnly(state, 0, "S2", "S6");
-            LeaveOnly(state, 1, "H8", "H3");
+            LeaveOnly(state, 1, "H8", "S3");
             SetDiscardTop(state, "S9");
             AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S2")));
             Assert.That(state.AttackStack, Is.EqualTo(CardCatalog.AttackTwo));
             AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H8")), RejectCode.NotAttackResponse);
-            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H3")));
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "S3")));
             Assert.That(state.AttackStack, Is.EqualTo(0));
         }
 
@@ -119,11 +351,25 @@ namespace Game.Rules.Tests
         #region Queen
 
         [Test]
-        public void QueenGiveChain_TransfersThenClearsStack()
+        public void QueenReverse_TwoPlayer_AdvancesToOpponent()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "SQ", "S6");
+            LeaveOnly(state, 1, "H9");
+            SetDiscardTop(state, "S5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "SQ")));
+            AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Reverse));
+            Assert.That(state.Direction, Is.EqualTo(MatchState.DirectionClockwise));
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
+            Assert.That(state.PendingQueenModeSeat, Is.Null);
+        }
+
+        [Test]
+        public void QueenGive_GiverPicksOneCard_NoDefendOrStack()
         {
             var state = Table(2);
             LeaveOnly(state, 0, "SQ", "S6", "S8");
-            LeaveOnly(state, 1, "H9", "H10");
+            LeaveOnly(state, 1, "H3", "HQ");
             SetDiscardTop(state, "S5");
             var giverCount = state.Hands[0].Count;
             var targetCount = state.Hands[1].Count;
@@ -133,12 +379,13 @@ namespace Game.Rules.Tests
             Assert.That(state.PendingQueenModeSeat, Is.EqualTo(0));
             AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Give));
             Assert.That(state.QueenStack, Is.EqualTo(1));
-            Assert.That(state.LastQueenSeat, Is.EqualTo(0));
-            Assert.That(state.CurrentSeat, Is.EqualTo(1));
-
-            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H9")), RejectCode.NotQueenResponse);
-            AssertAccepted(RuleEngine.AcceptQueen(state, 1));
             Assert.That(state.PendingGiveSeat, Is.EqualTo(0));
+            Assert.That(state.QueenGiveTargetSeat, Is.EqualTo(1));
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+
+            AssertRejected(RuleEngine.AcceptQueen(state, 1), RejectCode.NotQueenResponse);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H3")), RejectCode.NeedGiveCards);
+            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "HQ")), RejectCode.NeedGiveCards);
             AssertAccepted(RuleEngine.GiveCards(state, 0, new[] { givenId }));
 
             Assert.That(state.QueenStack, Is.EqualTo(0));
@@ -146,7 +393,26 @@ namespace Game.Rules.Tests
             Assert.That(ContainsInstance(state.Hands[1], givenId), Is.True);
             Assert.That(state.Hands[0].Count, Is.EqualTo(giverCount - 2));
             Assert.That(state.Hands[1].Count, Is.EqualTo(targetCount + 1));
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
             Assert.That(state.CountAllCards(), Is.EqualTo(CardCatalog.OfficialInstanceCount));
+        }
+
+        [Test]
+        public void QueenGive_GiverMayPickAnySuit()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "SQ", "H8", "C2");
+            LeaveOnly(state, 1, "S3");
+            SetDiscardTop(state, "S5");
+            var givenId = IdInHand(state, 0, "H8");
+
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "SQ")));
+            AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Give));
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+            AssertAccepted(RuleEngine.GiveCards(state, 0, new[] { givenId }));
+
+            Assert.That(ContainsInstance(state.Hands[1], givenId), Is.True);
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
         }
 
         #endregion
@@ -194,11 +460,11 @@ namespace Game.Rules.Tests
         #region Pill
 
         [Test]
-        public void Pill_LocksColor_BlocksJokerAndColorless()
+        public void Pill_LocksColor_AllowsMatchingJoker_BlocksColorless()
         {
             var state = Table(2);
             LeaveOnly(state, 0, CardCatalog.IdPillRed);
-            LeaveOnly(state, 1, CardCatalog.IdJokerColor, CardCatalog.IdSpear, "H8", "S9");
+            LeaveOnly(state, 1, CardCatalog.IdJokerColor, CardCatalog.IdJokerBw, CardCatalog.IdSpear, "H8", "S9");
             SetDiscardTop(state, "C5");
             var before = state.Hands[0].Count;
 
@@ -210,13 +476,13 @@ namespace Game.Rules.Tests
             Assert.That(state.WinnerSeat, Is.Null);
 
             AssertRejected(
-                RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdJokerColor)),
+                RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdJokerBw)),
                 RejectCode.ColorLocked);
             AssertRejected(
                 RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdSpear)),
                 RejectCode.ColorLocked);
             AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "S9")), RejectCode.ColorLocked);
-            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H8")));
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdJokerColor)));
             Assert.That(state.RequiredColor, Is.Null);
         }
 
@@ -237,6 +503,47 @@ namespace Game.Rules.Tests
         #endregion
 
         #region Finish
+
+        [Test]
+        public void DrawCard_HandReachesTwenty_BankruptsLikeSurrender()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "H8");
+            LeaveOnly(state, 1, "C3");
+            PadHand(state, 0, MatchState.BankruptHandCount - 1);
+            PutOnDeck(state, "S9");
+            SetDiscardTop(state, "S5");
+            Assert.That(state.Hands[0].Count, Is.EqualTo(MatchState.BankruptHandCount - 1));
+
+            AssertAccepted(RuleEngine.DrawCard(state, 0));
+            Assert.That(state.Hands[0].Count, Is.EqualTo(0));
+            Assert.That(state.IsSeatSurrendered(0), Is.True);
+            Assert.That(state.IsSeatActive(0), Is.False);
+            Assert.That(state.WinnerSeat, Is.EqualTo(1));
+            Assert.That(state.IsMatchOver, Is.True);
+            Assert.That(state.CountAllCards(), Is.EqualTo(CardCatalog.OfficialInstanceCount));
+        }
+
+        [Test]
+        public void AcceptAttack_HandReachesTwenty_Bankrupts()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "S2", "S6");
+            LeaveOnly(state, 1, "H8");
+            PadHand(state, 1, MatchState.BankruptHandCount - 2);
+            SetDiscardTop(state, "S5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S2")));
+            Assert.That(state.AttackStack, Is.EqualTo(2));
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
+
+            AssertAccepted(RuleEngine.DrawCard(state, 1));
+            Assert.That(state.IsSeatSurrendered(1), Is.True);
+            Assert.That(state.Hands[1].Count, Is.EqualTo(0));
+            Assert.That(state.AttackStack, Is.EqualTo(0));
+            Assert.That(state.WinnerSeat, Is.EqualTo(0));
+            Assert.That(state.IsMatchOver, Is.True);
+            Assert.That(state.CountAllCards(), Is.EqualTo(CardCatalog.OfficialInstanceCount));
+        }
 
         [Test]
         public void PlayCard_LastLegalAttack_FinishesWithoutEffect()
@@ -262,6 +569,48 @@ namespace Game.Rules.Tests
             Assert.That(state.IsSeatFinished(0), Is.False);
             Assert.That(state.WinnerSeat, Is.Null);
             Assert.That(state.RequiredColor, Is.EqualTo(ColorGroup.Black));
+        }
+
+        #endregion
+
+        #region Draw
+
+        [Test]
+        public void DrawCard_PlayableCard_StillAdvancesTurn()
+        {
+            var state = Table(2);
+            LeaveOnly(state, 0, "H8");
+            LeaveOnly(state, 1, "C3");
+            SetDiscardTop(state, "S5");
+            PutOnDeck(state, "S9");
+
+            AssertAccepted(RuleEngine.DrawCard(state, 0));
+            Assert.That(ContainsDef(state.Hands[0], "S9"), Is.True);
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
+            Assert.That(state.DrewThisTurn, Is.False);
+            AssertRejected(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S9")), RejectCode.NotYourTurn);
+        }
+
+        [Test]
+        public void DrawCard_HouseDrawAndPlay_KeepsTurnIfLegal()
+        {
+            var state = MatchState.Deal(2, FixedSeed, new HouseRules(
+                drawAndPlay: true,
+                jokerDefendable: true,
+                continueAfterFirstWin: false,
+                turnSeconds: HouseRules.OfficialTurnSeconds));
+            state.CurrentSeat = 0;
+            state.Direction = MatchState.DirectionCounterclockwise;
+            LeaveOnly(state, 0, "H8");
+            LeaveOnly(state, 1, "C3");
+            SetDiscardTop(state, "S5");
+            PutOnDeck(state, "S9");
+
+            AssertAccepted(RuleEngine.DrawCard(state, 0));
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+            Assert.That(state.DrewThisTurn, Is.True);
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "S9")));
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
         }
 
         #endregion
@@ -325,17 +674,19 @@ namespace Game.Rules.Tests
         }
 
         [Test]
-        public void ApplyTimeout_QueenResponse_StartsGive()
+        public void ApplyTimeout_QueenGive_GivesHighestScore()
         {
             var state = Table(2);
-            LeaveOnly(state, 0, "SQ", "S6");
+            LeaveOnly(state, 0, "SQ", "S6", "SA");
             LeaveOnly(state, 1, "H9");
             SetDiscardTop(state, "S5");
+            var highId = IdInHand(state, 0, "SA");
             AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "SQ")));
             AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Give));
-            AssertAccepted(RuleEngine.ApplyTimeout(state, 1));
-            Assert.That(state.PendingGiveSeat, Is.EqualTo(0));
-            Assert.That(state.QueenGiveTargetSeat, Is.EqualTo(1));
+            AssertAccepted(RuleEngine.ApplyTimeout(state, 0));
+            Assert.That(state.PendingGiveSeat, Is.Null);
+            Assert.That(ContainsInstance(state.Hands[1], highId), Is.True);
+            Assert.That(state.CurrentSeat, Is.EqualTo(1));
         }
 
         [Test]
@@ -368,7 +719,7 @@ namespace Game.Rules.Tests
         }
 
         [Test]
-        public void ApplyTimeout_ThreeConsecutive_SurrendersWithoutDiscardingHand()
+        public void ApplyTimeout_ThreeConsecutive_SurrendersAndDiscardsHand()
         {
             var state = Table(2);
             for (var i = 0; i < 2; i++)
@@ -377,14 +728,15 @@ namespace Game.Rules.Tests
                 AssertAccepted(RuleEngine.ApplyTimeout(state, 1));
             }
 
+            var beforeHand = SnapshotIds(state.Hands[0]);
+            Assert.That(beforeHand.Count, Is.GreaterThan(0));
             AssertAccepted(RuleEngine.ApplyTimeout(state, 0));
             Assert.That(state.IsSeatSurrendered(0), Is.True);
             Assert.That(state.GetConsecutiveTimeouts(0), Is.EqualTo(3));
-            var remaining = SnapshotIds(state.Hands[0]);
-            Assert.That(remaining.Count, Is.GreaterThan(0));
-            for (var i = 0; i < remaining.Count; i++)
+            Assert.That(state.Hands[0].Count, Is.EqualTo(0));
+            for (var i = 0; i < beforeHand.Count; i++)
             {
-                Assert.That(ContainsInstance(state.Discard, remaining[i]), Is.False);
+                Assert.That(ContainsInstance(state.Discard, beforeHand[i]), Is.True);
             }
 
             Assert.That(state.CountAllCards(), Is.EqualTo(CardCatalog.OfficialInstanceCount));
@@ -445,6 +797,21 @@ namespace Game.Rules.Tests
             Assert.That(result.Reject, Is.EqualTo(code));
         }
 
+        private static void PutOnDeck(MatchState state, string defId)
+        {
+            var card = TakeCard(state, item => item.Def.Id == defId);
+            var rest = state.Deck.ToArray();
+            state.Deck.Clear();
+            state.Deck.Enqueue(card);
+            for (var i = 0; i < rest.Length; i++)
+            {
+                state.Deck.Enqueue(rest[i]);
+            }
+
+            EnsureDiscardNotEmpty(state);
+            state.EnsureInvariant();
+        }
+
         private static void SetDiscardTop(MatchState state, string defId)
         {
             if (state.Discard.Count > 0 && state.DiscardTop.Def.Id == defId)
@@ -469,6 +836,23 @@ namespace Game.Rules.Tests
             for (var i = 0; i < defIds.Length; i++)
             {
                 hand.Add(TakeCard(state, card => card.Def.Id == defIds[i]));
+            }
+
+            EnsureDiscardNotEmpty(state);
+            state.EnsureInvariant();
+        }
+
+        private static void PadHand(MatchState state, int seat, int targetCount)
+        {
+            var hand = state.Hands[seat];
+            while (hand.Count < targetCount && state.TryDrawFromDeck(out var drawn))
+            {
+                hand.Add(drawn);
+            }
+
+            if (hand.Count != targetCount)
+            {
+                throw new InvalidOperationException($"Could not pad seat {seat} to {targetCount}.");
             }
 
             EnsureDiscardNotEmpty(state);
@@ -648,11 +1032,6 @@ namespace Game.Rules.Tests
                 }
 
                 return RuleEngine.ApplyTimeout(state, seat);
-            }
-
-            if (state.QueenStack > 0 && CollectLegal(state, seat).Count == 0)
-            {
-                return RuleEngine.AcceptQueen(state, seat);
             }
 
             var legal = CollectLegal(state, seat);
