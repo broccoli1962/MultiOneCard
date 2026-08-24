@@ -1,4 +1,6 @@
+using Backend.App;
 using Backend.Object.Management;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Backend.Object.UI
@@ -11,7 +13,8 @@ namespace Backend.Object.UI
         private const string PrefNick = "guest_nick";
         private const int NickMin = 2;
         private const int NickMax = 12;
-        private const int RoomCodeLength = 6;
+        private const int RoomCodeMin = 4;
+        private const int RoomCodeMax = 8;
 
         /// <summary>
         /// 닉을 복원하고 입력을 구독한다.
@@ -20,7 +23,9 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             View.SetNick(PlayerPrefs.GetString(PrefNick, string.Empty));
-            View.SetStatus("닉을 입력하세요");
+            View.SetLanHost(GatewaySettings.LanHost);
+            View.SetMode(GatewaySettings.Mode);
+            View.SetStatus(ModeStatus(GatewaySettings.Mode));
             BindView();
         }
 
@@ -35,10 +40,13 @@ namespace Backend.Object.UI
         private void BindView()
         {
             View.NickChanged += OnNickChanged;
+            View.LanHostChanged += OnLanHostChanged;
+            View.ModeClicked += OnModeClicked;
             View.QuickMatchClicked += OnQuickMatchClicked;
             View.CreateRoomClicked += OnCreateRoomClicked;
             View.JoinRoomClicked += OnJoinRoomClicked;
             View.BackClicked += OnBackClicked;
+            View.SettingsClicked += OnSettingsClicked;
         }
 
         private void UnbindView()
@@ -49,10 +57,13 @@ namespace Backend.Object.UI
             }
 
             View.NickChanged -= OnNickChanged;
+            View.LanHostChanged -= OnLanHostChanged;
+            View.ModeClicked -= OnModeClicked;
             View.QuickMatchClicked -= OnQuickMatchClicked;
             View.CreateRoomClicked -= OnCreateRoomClicked;
             View.JoinRoomClicked -= OnJoinRoomClicked;
             View.BackClicked -= OnBackClicked;
+            View.SettingsClicked -= OnSettingsClicked;
         }
 
         private void OnNickChanged(string nick)
@@ -63,6 +74,22 @@ namespace Backend.Object.UI
             }
 
             PlayerPrefs.SetString(PrefNick, normalized);
+        }
+
+        private void OnLanHostChanged(string host)
+        {
+            GatewaySettings.SaveLanHost(host);
+            View.SetLanHost(GatewaySettings.LanHost);
+            View.SetStatus(string.IsNullOrEmpty(GatewaySettings.LanHost)
+                ? "호스트 IP를 입력하세요"
+                : "호스트 IP 저장됨");
+        }
+
+        private void OnModeClicked(ConnectionMode mode)
+        {
+            GatewaySettings.SaveMode(mode);
+            View.SetMode(mode);
+            View.SetStatus(ModeStatus(mode));
         }
 
         private void OnQuickMatchClicked(int seatCount)
@@ -78,7 +105,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            View.SetStatus($"{nick} · 퀵매치 {seatCount}인 대기");
+            OpenRoom(nick, RandomRoomCode(), SessionLimits.ClampPlayers(seatCount), isHost: true);
         }
 
         private void OnCreateRoomClicked()
@@ -88,7 +115,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            View.SetStatus($"{nick} · 방 만들기");
+            OpenRoom(nick, RandomRoomCode(), SessionLimits.MaxPlayers, isHost: true);
         }
 
         private void OnJoinRoomClicked()
@@ -99,18 +126,34 @@ namespace Backend.Object.UI
             }
 
             var code = View.RoomCodeText != null ? View.RoomCodeText.Trim() : string.Empty;
-            if (code.Length != RoomCodeLength || !IsDigits(code))
+            if (!IsJoinCode(code))
             {
-                View.SetStatus("룸코드 6자리를 입력하세요");
+                View.SetStatus("방 코드를 입력하세요");
                 return;
             }
 
-            View.SetStatus($"{nick} · 룸 {code} 입장");
+            OpenRoom(nick, code, SessionLimits.MaxPlayers, isHost: false);
+        }
+
+        private static void OpenRoom(string nick, string roomCode, int seatCount, bool isHost)
+        {
+            RoomPresenter.Prepare(nick, roomCode, seatCount, isHost);
+            UIManager.OpenAsync<RoomPanel>().Forget();
+        }
+
+        private static string RandomRoomCode()
+        {
+            return UnityEngine.Random.Range(0, 1000000).ToString("D6");
         }
 
         private void OnBackClicked()
         {
             UIManager.Close(View);
+        }
+
+        private void OnSettingsClicked()
+        {
+            UIManager.OpenAsync<SettingsPopup>().Forget();
         }
 
         private bool RequireNick(out string nick)
@@ -131,11 +174,34 @@ namespace Backend.Object.UI
             return nick.Length >= NickMin && nick.Length <= NickMax;
         }
 
-        private static bool IsDigits(string value)
+        private static string ModeStatus(ConnectionMode mode)
         {
+            if (mode == ConnectionMode.Lan)
+            {
+                return "랜. 게스트는 서버 주소에 호스트 IP";
+            }
+
+            return UgsLobbyRelay.IsProjectLinked
+                ? "릴레이. 호스트 화면의 방 코드로 입장. 한 방 최대 " + SessionLimits.MaxPlayers + "인"
+                : "릴레이는 Edit > Project Settings > Services 에서 Cloud 연결 필요";
+        }
+
+        /// <summary>Unity 세션 조인 코드(영문·숫자, 대소문자 무시).</summary>
+        private static bool IsJoinCode(string value)
+        {
+            if (string.IsNullOrEmpty(value)
+                || value.Length < RoomCodeMin
+                || value.Length > RoomCodeMax)
+            {
+                return false;
+            }
+
             for (var i = 0; i < value.Length; i++)
             {
-                if (value[i] < '0' || value[i] > '9')
+                var c = value[i];
+                var letter = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+                var digit = c >= '0' && c <= '9';
+                if (!letter && !digit)
                 {
                     return false;
                 }
