@@ -26,6 +26,9 @@ namespace Backend.App
         /// <summary>재접속 스냅샷에 넣는 최근 채팅 줄 수.</summary>
         public const int ChatHistoryMax = 50;
 
+        /// <summary>기획서 §7 재대결 투표 제한(초). 미투표는 반대.</summary>
+        public const int RematchSeconds = 20;
+
         private readonly Queue<CommandMessage> _commandQueue = new Queue<CommandMessage>();
         private readonly List<EventMessage> _emitted = new List<EventMessage>();
         private readonly List<EventMessage> _chatHistory = new List<EventMessage>();
@@ -43,6 +46,7 @@ namespace Backend.App
         private string _phase;
         private MatchState _state;
         private long _turnDeadlineMs;
+        private long _rematchDeadlineMs;
         private int _eventSeq;
         private bool _processing;
         private bool _matchEndedEmitted;
@@ -56,7 +60,8 @@ namespace Backend.App
             string roomCode = null,
             int hostSeat = 0,
             HouseRules rules = null,
-            string[] nicks = null)
+            string[] nicks = null,
+            bool connectAllSeats = true)
         {
             if (seatCount < HouseRules.MinSeats || seatCount > HouseRules.MaxSeats)
             {
@@ -86,15 +91,15 @@ namespace Backend.App
                 _nicks[i] = nicks != null && i < nicks.Length && !string.IsNullOrEmpty(nicks[i])
                     ? nicks[i]
                     : "P" + i;
-                _connected[i] = true;
+                _connected[i] = connectAllSeats;
             }
         }
 
-        /// <summary>좌석 수. 생성 시 고정.</summary>
-        public int SeatCount { get; }
+        /// <summary>좌석 수. 생성 시 상한이며, 시작 직전 접속 인원으로 줄어들 수 있다.</summary>
+        public int SeatCount { get; private set; }
 
         /// <summary>방장 좌석.</summary>
-        public int HostSeat { get; }
+        public int HostSeat { get; private set; }
 
         /// <summary>Waiting / Starting / InMatch / Result.</summary>
         public string Phase => _phase;
@@ -141,6 +146,22 @@ namespace Backend.App
         public IReadOnlyList<EventMessage> Rejoin(int seat, long nowMs)
         {
             return RunLocked(nowMs, () => Rejoin_Internal(seat, nowMs));
+        }
+
+        /// <summary>대기실 닉을 넣고 RoomUpdated 를 낸다.</summary>
+        public IReadOnlyList<EventMessage> SetNick(int seat, string nick, long nowMs)
+        {
+            return RunLocked(nowMs, () =>
+            {
+                EnsureSeat(seat);
+                if (!string.IsNullOrEmpty(nick))
+                {
+                    _nicks[seat] = nick;
+                }
+
+                var ev = Ev(EvCode.RoomUpdated, seat);
+                ev.room = BuildRoomView();
+            });
         }
 
         /// <summary>해당 좌석이 받을 공개+개인 이벤트만 남긴다.</summary>
@@ -296,7 +317,7 @@ namespace Backend.App
                     HandleChat(command, nowMs);
                     return;
                 case OpCode.RematchVote:
-                    HandleRematchVote(command);
+                    HandleRematchVote(command, nowMs);
                     return;
                 case OpCode.Heartbeat:
                     HandleHeartbeat(command, nowMs);
@@ -309,6 +330,12 @@ namespace Backend.App
 
         private void ApplyExpired(long nowMs)
         {
+            if (_phase == MatchPhase.Result && _rematchDeadlineMs > 0 && nowMs >= _rematchDeadlineMs)
+            {
+                ResolveRematch();
+                return;
+            }
+
             if (_state == null || _state.IsMatchOver)
             {
                 return;
@@ -393,15 +420,22 @@ namespace Backend.App
                 return;
             }
 
-            if (!AllReady())
+            if (!AllConnectedReady())
             {
-                EmitReject(command, NetReject.NotYourTurn);
+                EmitReject(command, NetReject.NotAllReady);
+                return;
+            }
+
+            if (!TryShrinkToConnectedSeats())
+            {
+                EmitReject(command, NetReject.NotAllReady);
                 return;
             }
 
             _phase = MatchPhase.Starting;
             _state = MatchState.Deal(SeatCount, _seed, _rules);
             _matchEndedEmitted = false;
+            _rematchDeadlineMs = 0;
             _phase = MatchPhase.InMatch;
             RefreshTurnDeadline(nowMs);
 
@@ -490,7 +524,7 @@ namespace Backend.App
             RememberChat(ev);
         }
 
-        private void HandleRematchVote(CommandMessage command)
+        private void HandleRematchVote(CommandMessage command, long nowMs)
         {
             if (_phase != MatchPhase.Result)
             {
@@ -503,6 +537,46 @@ namespace Backend.App
             var ev = Ev(EvCode.RoomUpdated, command.seat);
             ev.ackSeq = command.seq;
             ev.room = BuildRoomView();
+            if (AllRematchVoted() || nowMs >= _rematchDeadlineMs)
+            {
+                ResolveRematch();
+            }
+        }
+
+        private bool AllRematchVoted()
+        {
+            for (var i = 0; i < SeatCount; i++)
+            {
+                if (!_rematchVoted[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void ResolveRematch()
+        {
+            if (_phase != MatchPhase.Result)
+            {
+                return;
+            }
+
+            _rematchDeadlineMs = 0;
+            _phase = MatchPhase.Waiting;
+            _state = null;
+            _matchEndedEmitted = false;
+            _turnDeadlineMs = 0;
+            for (var i = 0; i < SeatCount; i++)
+            {
+                _ready[i] = false;
+                _rematchVoted[i] = false;
+                _rematchYes[i] = false;
+            }
+
+            var room = Ev(EvCode.RoomUpdated, HostSeat);
+            room.room = BuildRoomView();
         }
 
         private void HandleHeartbeat(CommandMessage command, long nowMs)
@@ -621,7 +695,7 @@ namespace Backend.App
             else
             {
                 _turnDeadlineMs = 0;
-                EmitMatchEnded(ack);
+                EmitMatchEnded(ack, nowMs);
             }
         }
 
@@ -702,12 +776,28 @@ namespace Backend.App
                 given.fromSeat = before.PendingGive >= 0 ? before.PendingGive : before.ActingSeat;
                 given.toSeat = before.GiveTarget >= 0 ? before.GiveTarget : after.ActingSeat;
                 given.count = CountMoved(before, after);
+                // 지급은 CardPlayed 가 아니라서 준 좌석 손패가 클라에 남는다. 양쪽을 HandGranted 로 맞춘다.
+                for (var seat = 0; seat < SeatCount; seat++)
+                {
+                    if (!SameCounts(before.HandIds[seat], after.HandIds[seat]))
+                    {
+                        EmitHandGranted(seat);
+                    }
+                }
             }
 
             if (before.MirrorTarget != after.MirrorTarget
                 || before.PendingMirror != after.PendingMirror
                 || (before.MirrorTarget > 0 && !SameCounts(before.HandCounts, after.HandCounts)))
             {
+                for (var seat = 0; seat < SeatCount; seat++)
+                {
+                    if (!SameCounts(before.HandIds[seat], after.HandIds[seat]))
+                    {
+                        EmitHandGranted(seat);
+                    }
+                }
+
                 var mirror = Ev(EvCode.MirrorAdjusted, after.ActingSeat);
                 mirror.ackSeq = ack;
                 mirror.count = after.MirrorTarget;
@@ -726,6 +816,7 @@ namespace Backend.App
                     : after.QueenStack > before.QueenStack
                         ? QueenModeName.Give
                         : QueenModeName.Reverse;
+                ev.match = BuildPublicMatch();
             }
 
             if (before.PendingKing >= 0 && after.PendingKing < 0 && (after.KingExtra || after.PendingHide >= 0))
@@ -788,7 +879,7 @@ namespace Backend.App
             ev.match = BuildPublicMatch();
         }
 
-        private void EmitMatchEnded(int ack)
+        private void EmitMatchEnded(int ack, long nowMs)
         {
             if (_matchEndedEmitted)
             {
@@ -797,6 +888,12 @@ namespace Backend.App
 
             _matchEndedEmitted = true;
             _phase = MatchPhase.Result;
+            _rematchDeadlineMs = nowMs + RematchSeconds * 1000L;
+            for (var i = 0; i < SeatCount; i++)
+            {
+                _rematchVoted[i] = false;
+                _rematchYes[i] = false;
+            }
             var standings = RuleEngine.ComputeStandings(_state);
             var ranks = new int[SeatCount];
             var scores = new int[SeatCount];
@@ -811,6 +908,7 @@ namespace Backend.App
 
             var ev = Ev(EvCode.MatchEnded, 0);
             ev.ackSeq = ack;
+            ev.deadlineMs = _rematchDeadlineMs;
             ev.result = new MatchEndView
             {
                 ranks = ranks,
@@ -899,7 +997,11 @@ namespace Backend.App
             var ready = new bool[SeatCount];
             Array.Copy(_ready, ready, SeatCount);
             var nicks = new string[SeatCount];
-            Array.Copy(_nicks, nicks, SeatCount);
+            for (var i = 0; i < SeatCount; i++)
+            {
+                nicks[i] = _connected[i] ? _nicks[i] : string.Empty;
+            }
+
             return new RoomView
             {
                 roomCode = _roomCode,
@@ -1022,14 +1124,71 @@ namespace Backend.App
             return seat >= 0 && seat < SeatCount;
         }
 
-        private bool AllReady()
+        private bool AllConnectedReady()
         {
+            var connected = 0;
             for (var i = 0; i < SeatCount; i++)
             {
+                if (!_connected[i])
+                {
+                    continue;
+                }
+
+                connected++;
                 if (!_ready[i])
                 {
                     return false;
                 }
+            }
+
+            return connected >= HouseRules.MinSeats;
+        }
+
+        /// <summary>
+        /// 접속 중인 좌석만 남긴다. 빈 칸(6인 방·2명 시작)을 Deal 인원에서 뺀다.
+        /// PlayHost 좌석 맵과 맞추려면 접속 좌석이 앞쪽부터 빈틈 없이 있어야 한다.
+        /// </summary>
+        private bool TryShrinkToConnectedSeats()
+        {
+            var connectedCount = 0;
+            for (var i = 0; i < SeatCount; i++)
+            {
+                if (_connected[i])
+                {
+                    connectedCount++;
+                }
+            }
+
+            if (connectedCount < HouseRules.MinSeats || connectedCount > SeatCount)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < connectedCount; i++)
+            {
+                if (!_connected[i])
+                {
+                    return false;
+                }
+            }
+
+            for (var i = connectedCount; i < SeatCount; i++)
+            {
+                if (_connected[i])
+                {
+                    return false;
+                }
+            }
+
+            if (connectedCount == SeatCount)
+            {
+                return true;
+            }
+
+            SeatCount = connectedCount;
+            if (HostSeat >= SeatCount)
+            {
+                HostSeat = 0;
             }
 
             return true;

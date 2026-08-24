@@ -29,5 +29,6 @@ namespace Backend.Net
         public const string RoomFull = "RoomFull";
         public const string MatchAlreadyStarted = "MatchAlreadyStarted";
         public const string GraceExpired = "GraceExpired";
+        public const string NotAllReady = "NotAllReady";
     }
 }

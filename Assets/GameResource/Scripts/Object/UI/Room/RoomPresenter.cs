@@ -281,6 +281,31 @@ namespace Backend.Object.UI
             return message;
         }
 
+        private static string FormatReject(string reject)
+        {
+            if (string.IsNullOrEmpty(reject))
+            {
+                return "거절";
+            }
+
+            if (reject == Backend.Net.RejectCode.NotAllReady)
+            {
+                return "접속한 전원 준비가 필요합니다";
+            }
+
+            if (reject == Backend.Net.RejectCode.NotYourTurn)
+            {
+                return "방장만 시작할 수 있습니다";
+            }
+
+            if (reject == Backend.Net.RejectCode.MatchAlreadyStarted)
+            {
+                return "이미 시작된 판입니다";
+            }
+
+            return reject;
+        }
+
         private void OnNetEvent(EventMessage ev)
         {
             if (ev == null)
@@ -293,7 +318,7 @@ namespace Backend.Object.UI
 
             if (ev.ev == EvCode.Reject)
             {
-                _status = ev.reject ?? "거절";
+                _status = FormatReject(ev.reject);
                 Refresh();
                 return;
             }
