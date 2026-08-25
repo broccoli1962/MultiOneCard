@@ -1,0 +1,27 @@
+---
+description: GSSL Agent cache policy — never hand-edit cache in real usage
+globs: Assets/GoogleSpreadSheetLoader/Generated/Cache/**
+alwaysApply: false
+---
+
+# GSSL Cache Policy
+
+`Assets/GoogleSpreadSheetLoader/Generated/Cache/` is owned by Google SpreadSheet Loader (GSSL).
+
+## Real usage (table edit + sync requests)
+
+- Treat cache files as **read-only** for schema inspection and post-sync verification.
+- Apply data changes only through **MCP gsheets** (Google Sheets), then run `Tools/GSSL/Sync Pending Sheets` with `mode: "update"`.
+- Never hand-edit `*.txt` cache files to apply user-requested table changes.
+- Never hand-edit `Assets/Resources/Localize_*.json` — Localization sheets → GSSL sync only.
+- Never use `mode: "regenerate"` immediately after MCP sheet edits.
+
+## If sync fails
+
+- Retry sync, inspect `.cursor/gssl-result.json` and Unity console.
+- Fix GSSL/Agent Bridge issues instead of patching cache or Localize JSON.
+- Do not edit cache unless the user explicitly asks for temporary logic/debug investigation.
+
+## Source of truth
+
+Google Sheets -> GSSL download (`mode: update`) -> cache -> generated scripts/assets / `Localize_*.json`

@@ -1,0 +1,46 @@
+---
+description: MinerReady Unity 프로젝트 전체 구조 및 핵심 시스템 개요
+alwaysApply: true
+---
+
+# Unity Project Overview
+
+## 디렉토리 구조
+
+```
+Assets/GameResources/
+  Scenes/GameScene.unity
+  Data/  — ScriptableObject, GameSettings
+  Scripts/
+    Object/
+      Controller/     — 게임 화면에 실제로 존재하는 객체
+      FX/             — ParticleAutoReturn 등 이펙트
+      GameSystems/    — 게임 시스템 구현
+      UI/             — PopupBase, SafeArea
+      Management/     — GameManager, InputManager, ObjectPoolManager, AudioManager
+    Util/             — GameStateUtil, Attribute
+      Addressable/
+      Input/
+      Interface/      — 인터페이스 구현
+      Enum/           — 열거형 구현
+      Management/     — Singleton, SingletonBehavior, SingletonGameObject
+```
+
+## 핵심 외부 패키지
+
+- **UniTask** — 비동기 처리
+- **Addressables** — 리소스 로드
+- **InputSystem** — 입력 처리
+- **R3** - 이벤트 처리
+- **LitMotion** - 간단한 애니메이션 처리
+
+## 핵심 시스템
+
+- **SingletonGameObject\<T\>** — MonoBehaviour 기반 Lazy Singleton, `DontDestroyOnLoad` 자동 적용
+- **ResourceManager** — Addressables 동기/비동기 로드
+- **ObjectPoolManager** — 오브젝트 풀링
+- **SoundManager** — BGM/SFX, ObjectPoolManager 연동
+
+## 필수 패턴
+
+앱 종료 시 Manager 접근 전 `GameStateUtil.IsQuitting` 체크 필수. null 반환하여 새 인스턴스 생성 방지.

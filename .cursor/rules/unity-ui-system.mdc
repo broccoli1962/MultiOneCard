@@ -1,0 +1,190 @@
+---
+description: UI 클래스 계층, UIManager, UILayer, MVP, 인스펙터 옵션, SafeArea, 커스텀 어트리뷰트
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Unity UI System
+
+## 핵심 파일 (경로명은 프로젝트마다 다를 수 있음)
+
+```
+.../UI/
+ UIBase.cs           — 모든 UI 의 공통 베이스 (View)
+ UIBase.Generic.cs   — UIBase<TPresenter> (MVP 결합)
+ UIPanel.cs          — UIPanel / UIPanel<TPresenter>
+ UIPopup.cs          — UIPopup / UIPopup<TPresenter>
+ UIView.cs           — UIView (UIManager 비관리 서브뷰, Show/Hide)
+ UIView.Generic.cs   — UIView<TPresenter> (MVP 결합)
+ UIPresenter.cs      — UIPresenter / UIPresenter<TView>
+ UILayer.cs          — HUD / Panel / Navigation / Popup
+ UIRegistry.cs       — 레이어별 RectTransform 매핑
+
+.../Management/
+ UIManager.cs        — UI 생성/오픈/닫기/뒤로가기 관리
+```
+
+## 클래스 계층
+
+| 베이스 | 용도 | 기본 Layer | 기본 BackButton |
+|--------|------|------------|------------------|
+| `UIBase` | 모든 관리형 UI 의 공통 추상 베이스 | (직접 구현) | `false` |
+| `UIPanel` | 메인 화면/메뉴 등 비-MVP 패널 | `Panel` | `false` |
+| `UIPopup` | 모달 팝업 (비-MVP) | `Popup` | `true` |
+| `UIBase<TPresenter>` | MVP 패턴 View 베이스 | (직접 구현) | `false` |
+| `UIPanel<TPresenter>` | MVP 결합 패널 | `Panel` | `false` |
+| `UIPopup<TPresenter>` | MVP 결합 팝업 | `Popup` | `true` |
+| `UIView` | UIManager 비관리 서브뷰. 부모 Panel 의 `Show`/`Hide` 로만 전환 | — | — |
+| `UIView<TPresenter>` | MVP 결합 UIView | — | — |
+
+- 인게임 HUD 도 관리형 UI 다. `UIPanel`/`UIPanel<TPresenter>` 을 상속하고 `Layer` 만 `UILayer.HUD` 로 override 한다 (상세는 "HUD 레이어" 참고).
+- 새 관리형 UI(= UIManager 로 여닫는 화면)는 반드시 `UIBase`/`UIPanel`/`UIPopup` 계열 베이스 중 하나를 상속한다. `MonoBehaviour` 직접 상속 금지.
+- 부모 Panel 내부에서 탭처럼 교체되는 서브뷰는 `UIView` (또는 MVP 가 필요하면 `UIView<TPresenter>`) 를 상속한다. UIView 는 UIManager 가 관리하지 않으며 백 스택과도 무관하다.
+
+## MVP (Model-View-Presenter)
+
+- View 는 `UIBase<TPresenter>` (또는 `UIPanel/UIPopup/UIView<TPresenter>`) 상속, `Presenter` 프로퍼티로 접근.
+- Presenter 는 `UIPresenter` 또는 강타입 `UIPresenter<TView>` 상속. `TView` 는 `CachedMonobehaviour` 기반이므로 UIBase 계열과 UIView 모두 사용 가능.
+- View 는 입력/표시만, 비즈니스 로직은 Presenter 가 담당.
+- Model 정적 데이터는 Presenter 가 `TableManager` 로 조회한다. View 가 직접 호출하지 않는다.
+- 씬 진입 시 어떤 UI 들을 띄울지는 `SceneContext` 가 구성한다(상세는 `unity-scene-system` 참조). 개별 Panel/View 는 형제 UI(NavBar 등) 를 직접 오픈하지 않고 자기 동작만 책임지며, UI 간 통신은 static Observable 등 진입 순서에 무관한 채널을 사용한다.
+
+```csharp
+public class ExamplePanel : UIPanel<ExamplePresenter> { }
+
+public class ExamplePresenter : UIPresenter<ExamplePanel>
+{
+    public override void OnOpen()
+    {
+        // View.SomeButton.OnClickAsObservable()...
+    }
+}
+```
+
+## UIManager — 표준 API
+
+UI 의 생성/오픈/닫기/뒤로가기 스택은 **반드시** `UIManager` 를 통해 처리한다.
+직접 `Instantiate` / `SetActive` 로 띄우지 말 것.
+
+Manager 함수 규칙(`unity-scene-system`)에 따라 외부는 **정적 메서드**로만 호출한다 (`UIManager.Instance.XXX` 금지).
+
+| 정적 메서드 | 용도 |
+|--------|------|
+| `UIManager.Open<T>()` | 풀이 이미 만들어져 있는 UI 를 동기로 오픈 |
+| `UIManager.OpenAsync<T>(string addressableKey = null)` | Addressable 로드 후 풀 생성 + 오픈. 키 생략 시 `AddressableKeys.UI.Get<T>()` |
+| `UIManager.Close<T>(T ui)` | 닫고 풀로 반환 (풀 유지) |
+| `UIManager.CloseDynamic<T>(T ui)` | 닫고 풀까지 해제 (Addressable 핸들 반환) |
+| `UIManager.PopBack()` | 뒤로가기 / ESC. 입력은 `InputActionHandler` 가 자동 위임 |
+| `UIManager.OnBackEmpty` | 백 스택 비어있을 때 뒤로가기 발행되는 R3 `Observable<Unit>` |
+
+```csharp
+// 1회성/동적 UI
+var popup = await UIManager.OpenAsync<ConfirmPopup>();
+UIManager.CloseDynamic(popup);
+
+// 씬 진입 시 HUD (SceneContext 에서 OpenAsync)
+var hud = await UIManager.OpenAsync<BattleHud>();
+```
+
+## UILayer 와 UIRegistry
+
+- `UILayer`: `HUD` / `Panel` / `Navigation` / `Popup` (위로 갈수록 상위 레이어).
+- 씬에 `UIRegistry` 컴포넌트를 한 번 배치하고, 인스펙터에서 레이어별 `RectTransform` 을 매핑.
+- `UIManager` 가 오픈 시 자동으로 해당 레이어 루트 아래로 reparent + `SetAsLastSibling`.
+- 모든 신규 UI 는 `Layer` 프로퍼티를 올바르게 지정해야 함 (베이스 클래스 디폴트 사용 권장).
+- 레이어 간 렌더 순서는 UIRoot 프리팹에서 각 레이어 Canvas 의 `sortingOrder` (또는 sibling 순서)로 `HUD < Panel < Navigation < Popup` 이 되도록 보장한다.
+- 각 레이어 루트(`Layer_HUD` 등)는 빈 앵커다. 자식 UI 는 씬에 정적으로 두지 않고 `UIManager` 오픈 시 reparent 된다.
+
+### Navigation 레이어 — Panel 위 / Popup 아래 상주 UI
+
+- NavBar 처럼 어떤 Panel 이 열려도 가려지면 안 되고, Popup 보다는 아래여야 하는 UI 는 `UILayer.Navigation` 으로 둔다.
+- Navigation 레이어 UI 도 일반 관리형 UI 처럼 `UIPanel` 을 상속하고 `Layer` 만 `UILayer.Navigation` 으로 override 한다.
+- 이런 UI 의 오픈/닫기는 진입점인 `SceneContext` 가 담당하며, 다른 Panel 이 직접 오픈하지 않는다.
+
+### HUD 레이어 — 관리형 인게임 HUD
+
+인게임 HUD 는 **씬 정적 자식이 아니라** 다른 관리형 UI 와 동일하게 `UIManager` 로 오픈한다.
+
+| 항목 | 내용 |
+|------|------|
+| 베이스 | `UIPanel` / `UIPanel<TPresenter>` + `Layer => UILayer.HUD` |
+| 오픈 | 해당 씬의 `SceneContext` 에서 `UIManager.OpenAsync<T>()` (또는 풀이 있으면 `Open<T>()`) |
+| 프리팹 | Addressable 등록 + `AddressableKeys.UI.Get<T>()` 매핑 |
+| 배치 | 오픈 시 `Layer_HUD` 아래로 자동 reparent (루트 자체는 빈 앵커) |
+| 렌더 | Panel / Navigation / Popup 보다 아래 → 팝업에 항상 가려짐 |
+
+```csharp
+public class BattleHud : UIPanel<BattleHudPresenter>
+{
+    public override UILayer Layer => UILayer.HUD;
+    // 필요 시 Container / Anchor 를 노출해 Controller 가 바인딩
+}
+```
+
+- HUD View 는 입력·표시와(필요 시) 컨테이너/앵커 노출을 담당한다. 게이지·버튼 등 UI 로직은 Presenter, 월드/슬롯 스폰 등은 Controller 가 HUD 가 노출한 컨테이너에 바인딩한다.
+- Controller·System 은 HUD 를 직접 생성하지 않는다. `SceneContext` 가 HUD 를 먼저 오픈한 뒤, 반환된 인스턴스의 참조를 넘긴다.
+- `Layer_HUD` 아래에 HUD 프리팹을 씬 정적 자식으로 두지 말 것. `UIBase`/`UIManager` 를 우회하는 정적 게임 HUD 방식은 사용하지 않는다.
+
+## 라이프사이클 훅
+
+```csharp
+public class MyPopup : UIPopup
+{
+    protected override void OnOpen()  { /* 활성화 직후 */ }
+    protected override void OnClose() { /* 닫기 애니 후, 풀 반환 직전 */ }
+
+    public override bool OnBackPressed()
+    {
+        // false 반환 시 UIManager 가 닫지 않음 (예: 확인 팝업 띄우기)
+        return true;
+    }
+}
+```
+
+- `OnOpen` 에서 Open SFX 가 자동 재생됨 (`_useOpenSound` 활성화 시).
+- `CloseAsync` 는 `UIManager` 가 호출하므로 직접 부르지 말 것 → 닫기는 `UIManager.Close/CloseDynamic`.
+- 중복 닫기는 내부 `_isClosing` 플래그로 방어됨.
+
+## 인스펙터 옵션 (UIBase 공통)
+
+| 그룹 | 필드 | 설명 |
+|------|------|------|
+| Open Sound | `_useOpenSound` / `_openSoundKey` | 오픈 시 `AudioManager.PlaySfx(key)` 호출 |
+| Close Animation | `_useCloseAnimation` / `_closeAnimDelay` / `_closeAnimTrigger` | Animator 트리거(default `"close"`) 후 delay 만큼 대기 |
+| Back Button | `_handleBackButton` | true 면 백 스택 등록. 베이스의 `DefaultHandleBackButton` 으로 디폴트값 결정 |
+
+- 토글 필드 바로 아래의 종속 필드는 `[ShowIf]` 로 노출/비활성 제어.
+- `Reset()` 시 `DefaultHandleBackButton` 이 `_handleBackButton` 의 초기값으로 들어감.
+
+## Addressable 키 매핑
+
+- UI 프리팹은 Addressable 그룹에 등록하고 `AddressableKeys.UI.Get<T>()` 가 키를 반환하도록 매핑.
+- `OpenAsync<T>()` 에서 `addressableKey` 인자를 생략하면 자동으로 위 메서드를 사용.
+- 일회성 UI 는 `CloseDynamic` 으로 풀까지 해제하여 메모리 회수.
+
+## SafeArea
+
+- 노치/펀치홀 대응을 위해 UI Canvas 루트 (각 레이어 RectTransform) 에 `SafeArea` 컴포넌트를 추가.
+
+## AudioManager (UI 에서의 사용)
+
+| 메서드 | 용도 |
+|--------|------|
+| `AudioManager.PlaySfx(key)` | 일반 SFX |
+| `AudioManager.PlaySfx_Delay(key, delay)` | 딜레이 SFX |
+| `AudioManager.PlayBgm(key)` | BGM (페이드 인/아웃 자동) |
+
+`UIBase` 의 Open SFX 는 내부적으로 `AudioManager.PlaySfx` 를 호출한다.
+별도 효과음은 Presenter 또는 View 의 이벤트 핸들러에서 직접 호출.
+
+## 커스텀 어트리뷰트
+
+- `[ShowIf]` — 조건부 필드 표시/비활성화. UIBase 의 인스펙터 옵션처럼 토글 종속 필드에 적극 사용.
+
+## 금지 사항
+
+- `Instantiate` / `Destroy` / `SetActive` 로 UI 직접 제어 금지. 반드시 `UIManager` 사용.
+- `UIBase.CloseAsync` 외부 호출 금지. 닫기는 `UIManager.Close` / `CloseDynamic`.
+- `MonoBehaviour` 를 직접 상속한 관리형 UI(인게임 HUD 포함) 작성 금지. `UIBase` 계열 베이스 사용.
+- `Layer_HUD` 아래에 HUD 를 씬 정적 자식으로 두고 System/Controller 가 직접 구동하는 방식 금지.
+- 백 키/ESC 직접 폴링 금지. `UIManager.PopBack` 또는 `UIRegistry`/`InputActionHandler` 경로 사용.

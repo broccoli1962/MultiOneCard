@@ -49,6 +49,8 @@
 ExportedObj/
 .consulo/
 *.csproj
+# Unity 생성 csproj 만 무시. server/ 게이트웨이 프로젝트는 추적한다.
+!/server/**/*.csproj
 *.unityproj
 *.sln
 *.suo
@@ -105,3 +107,12 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# cursor-auto-work
+runtime/
+
+# local agent / test output
+.cursor/gssl-result.json
+.cursor/gssl-pending.json
+.cursor/rules/.git-workflow-sync.json
+Assets/Tests/EditMode/TestResults.*

@@ -1,0 +1,48 @@
+---
+description: 테이블·로컬라이즈 생성물 직접 수정 금지 — Google Sheets가 단일 소스
+alwaysApply: true
+---
+
+# GSSL Generated Data — Do Not Hand-Edit
+
+테이블 데이터와 로컬라이즈 JSON은 **Google Sheets가 단일 소스(source of truth)** 다.
+에이전트가 생성물을 직접 고치면, 이후 GSSL 최신화 시 **변경이 통째로 덮어써져 유실**된다.
+
+## 절대 직접 수정 금지
+
+- `Assets/Resources/Localize_*.json`
+- `Assets/GoogleSpreadSheetLoader/Generated/**` (Cache, Script, ScriptableObject 등)
+- 그 외 GSSL이 생성하는 테이블 에셋
+
+## 올바른 변경 경로
+
+```
+Google Sheets (MCP gsheets로 수정)
+ → Tools/GSSL/Sync Pending Sheets (mode: update)
+ → Generated/Cache + Localize JSON / 테이블 스크립트·에셋
+```
+
+1. `cache_index.json` / Cache `*.txt`로 스키마만 **읽기**
+2. MCP gsheets로 스프레드시트 수정
+3. `.cursor/gssl-pending.json` 작성 후 `Tools/GSSL/Sync Pending Sheets`
+4. `.cursor/gssl-result.json`이 `success`인지 확인 후, **생성물 diff만** 커밋
+
+워크플로 상세는 `gssl-agent-workflow` 스킬을 따른다.  
+시트 서식·Localization 행 규칙은 `gssl-sheet-writing`을 따른다.
+
+## 금지 예시
+
+```text
+❌ Localize_Korean.json / Localize_English.json에 키를 직접 추가·수정
+❌ Generated/Cache/*.txt를 편집해 테이블 값 반영
+❌ 시트 수정 직후 mode: regenerate만으로 최신화 대체
+```
+
+```text
+✅ Localization 타입 시트에 행 추가 → GSSL Sync Pending
+✅ Common 테이블 시트 수정 → GSSL Sync Pending
+```
+
+## 동기화 실패 시
+
+캐시·JSON을 손으로 패치하지 않는다. `.cursor/gssl-result.json`·Unity 콘솔을 보고 GSSL/인증 문제를 고친 뒤 재동기화한다.
