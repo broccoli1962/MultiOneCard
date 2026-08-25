@@ -15,7 +15,7 @@ namespace Game.Rules
         public const int OfficialTurnSeconds = 15;
 
         public static readonly HouseRules Official = new HouseRules(
-            drawAndPlay: true,
+            drawAndPlay: false,
             jokerDefendable: true,
             continueAfterFirstWin: false,
             turnSeconds: OfficialTurnSeconds);
@@ -40,7 +40,7 @@ namespace Game.Rules
             TurnSeconds = turnSeconds;
         }
 
-        /// <summary>true 면 드로우 장을 같은 턴에 낼 수 있다.</summary>
+        /// <summary>true 면 드로우 장을 같은 턴에 낼 수 있다. Official 은 false(뽑고 턴 종료).</summary>
         public bool DrawAndPlay { get; }
 
         /// <summary>true 면 조커 공격을 3·4 로 막을 수 있다.</summary>

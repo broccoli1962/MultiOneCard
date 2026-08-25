@@ -132,6 +132,7 @@ namespace Game.Rules
 
         public int AttackStack { get; set; }
 
+        /// <summary>공개 버림 top이 죽창일 때만 true. 2·A·조커가 덮이면 꺼진다.</summary>
         public bool SpearInStack { get; set; }
 
         /// <summary>
@@ -147,7 +148,7 @@ namespace Game.Rules
         public ColorGroup? AttackDefendColor { get; set; }
 
         /// <summary>
-        /// 공격 체인 중 2·A 이어가기 랭크. 같은 랭크만 스택(색·문양 무관).
+        /// 공격 체인 중 2·A 이어가기 랭크. 같은 랭크이거나 같은 문양의 2·A면 스택.
         /// 조커·죽창 공격이면 null. 패스·역날검 후에도 유지.
         /// </summary>
         public Rank? AttackDefendRank { get; set; }
@@ -166,7 +167,7 @@ namespace Game.Rules
         /// <summary>Q Reverse/Give 선택을 기다리는 좌석.</summary>
         public int? PendingQueenModeSeat { get; set; }
 
-        /// <summary>Q Give 후 1장을 고를 좌석(낸 사람).</summary>
+        /// <summary>Q Give 후 1장을 고를 좌석(낸 사람). 대상이 감수하기 전에는 null.</summary>
         public int? PendingGiveSeat { get; set; }
 
         /// <summary>Q 지급을 받을 다음 활성 좌석.</summary>

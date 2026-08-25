@@ -3,6 +3,8 @@
     "rootNamespace": "Game.Rules.Tests",
     "references": [
         "Game.Rules",
+        "Backend.App",
+        "Backend.Net",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

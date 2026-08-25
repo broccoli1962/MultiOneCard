@@ -7,8 +7,8 @@ namespace Game.Rules
     /// Official 수 엔진. PlayCard / DrawCard / MirrorDiscard /
     /// ChooseSuit / ChooseQueenMode / AcceptQueen / GiveCards / ChooseKingMode / HideUnder /
     /// ApplyTimeout / Surrender / ComputeStandings.
-    /// 랭크 특수: 7 문양, J 스킵, Q Reverse·Give(즉시 1장 지급), K Extra·Hide(숨김은 공개 제외).
-    /// 공격: 2·A는 같은 랭크만 이어가기(색 무관), 조커 위 2·A는 색 일치. 조커 방어는 JokerDefendable 시 같은 색 3·4.
+    /// 랭크 특수: 7 문양, J 스킵, Q Reverse·Give(같은 문양 3·4로 방어 가능, 감수 후 1장 지급), K Extra·Hide(숨김은 공개 제외).
+    /// 공격: 2·A는 같은 랭크(색 무관) 또는 같은 문양으로 이어가기, 조커 위 2·A는 색 일치. 조커 위 조커는 색 무관. 조커 방어는 JokerDefendable 시 같은 색 3·4.
     /// 초과: 일반 드로우1, 공격 스택, Q Reverse/점수순 1장 지급, K만/낮은 점수 숨김, 7 원래 무늬, 미러 높은 점수.
     /// 연속 타임아웃 3회=기권. 손패 20장 이상=파산(기권과 동일). 점프·리버스는 활성 좌석만 센다.
     /// </summary>
@@ -132,6 +132,11 @@ namespace Game.Rules
                 return AcceptAction(state, seat);
             }
 
+            if (state.QueenStack > 0 && !state.PendingGiveSeat.HasValue)
+            {
+                return AcceptQueen(state, seat);
+            }
+
             if (state.KingExtraPending)
             {
                 return RuleResult.Rejected(RejectCode.IllegalCard);
@@ -253,8 +258,8 @@ namespace Game.Rules
         }
 
         /// <summary>
-        /// Q 모드. Reverse=방향 반전 후 다음 활성. Give=다음 활성에게 손패 1장 즉시 지급.
-        /// 지급은 방어·중첩이 없다.
+        /// Q 모드. Reverse=방향 반전 후 다음 활성.
+        /// Give=다음 활성이 같은 문양 3·4로 막거나, 감수 후 낸 사람이 손패 1장을 지급한다.
         /// </summary>
         public static RuleResult ChooseQueenMode(MatchState state, int seat, QueenMode mode)
         {
@@ -278,9 +283,10 @@ namespace Game.Rules
             {
                 state.QueenStack = 1;
                 state.LastQueenSeat = seat;
-                state.PendingGiveSeat = seat;
+                state.PendingGiveSeat = null;
                 state.QueenGiveTargetSeat = NextSeat(state, seat);
-                state.CurrentSeat = seat;
+                state.CurrentSeat = state.QueenGiveTargetSeat.Value;
+                ClearDrawFlags(state);
             }
             else
             {
@@ -292,13 +298,33 @@ namespace Game.Rules
         }
 
         /// <summary>
-        /// 구 감수 API. Give는 즉시 지급이라 항상 거절한다.
+        /// Q Give 감수. 대상이 받으면 낸 사람이 손패 1장을 고른다.
         /// </summary>
         public static RuleResult AcceptQueen(MatchState state, int seat)
         {
-            _ = state;
-            _ = seat;
-            return RuleResult.Rejected(RejectCode.NotQueenResponse);
+            if (state.IsMatchOver)
+            {
+                return RuleResult.Rejected(RejectCode.NotYourTurn);
+            }
+
+            if (state.QueenStack <= 0
+                || state.PendingGiveSeat.HasValue
+                || !state.QueenGiveTargetSeat.HasValue)
+            {
+                return RuleResult.Rejected(RejectCode.NotQueenResponse);
+            }
+
+            if (seat != state.QueenGiveTargetSeat.Value)
+            {
+                return RuleResult.Rejected(RejectCode.NotYourTurn);
+            }
+
+            var giver = state.LastQueenSeat ?? PreviousSeat(state, seat);
+            state.PendingGiveSeat = giver;
+            state.CurrentSeat = giver;
+            ClearDrawFlags(state);
+            state.EnsureInvariant();
+            return AcceptAction(state, seat);
         }
 
         /// <summary>
@@ -576,11 +602,20 @@ namespace Game.Rules
         }
 
         /// <summary>
-        /// 죽창 +5·spearInStack / 패스 스택 유지 / 역날검 2×·체인 1회 / 리버스조커 순환·스택 불변.
+        /// 죽창 +5(top일 때만 3·4 불가) / 패스 스택 유지 / 역날검 2×·체인 1회 / 리버스조커 순환·스택 불변.
         /// 2·A는 AttackDefendSuit, 조커는 AttackDefendColor. 패스·역날검은 방어 기준을 유지한다.
+        /// Q Give 중 같은 문양 3·4는 지급을 취소한다.
         /// </summary>
         private static void ApplyPlayedCard(MatchState state, CardDef card)
         {
+            if (state.QueenStack > 0 && (card.Rank == Rank.Three || card.Rank == Rank.Four))
+            {
+                ClearQueenChain(state);
+                UpdateRequiredAfterPlay(state, card);
+                ClearDrawFlags(state);
+                return;
+            }
+
             if (state.AttackStack > 0)
             {
                 if (card.Rank == Rank.Three || card.Rank == Rank.Four)
@@ -595,6 +630,7 @@ namespace Game.Rules
                 {
                     UpdateRequiredAfterPlay(state, card);
                     ClearDrawFlags(state);
+                    RefreshSpearOnTop(state);
                     return;
                 }
 
@@ -603,6 +639,7 @@ namespace Game.Rules
                     ApplyCounter(state);
                     UpdateRequiredAfterPlay(state, card);
                     ClearDrawFlags(state);
+                    RefreshSpearOnTop(state);
                     return;
                 }
             }
@@ -612,6 +649,7 @@ namespace Game.Rules
                 ApplyReverseJoker(state);
                 UpdateRequiredAfterPlay(state, card);
                 ClearDrawFlags(state);
+                RefreshSpearOnTop(state);
                 return;
             }
 
@@ -620,6 +658,7 @@ namespace Game.Rules
                 ApplySpear(state);
                 UpdateRequiredAfterPlay(state, card);
                 ClearDrawFlags(state);
+                RefreshSpearOnTop(state);
                 return;
             }
 
@@ -632,19 +671,25 @@ namespace Game.Rules
 
             UpdateRequiredAfterPlay(state, card);
             ClearDrawFlags(state);
+            RefreshSpearOnTop(state);
         }
 
-        /// <summary>죽창: +5. 3·4 불가. 스택에 한 장이라도 있으면 spearInStack.</summary>
+        /// <summary>죽창: +5. 3·4 불가는 공개 top이 죽창인 동안만.</summary>
         private static void ApplySpear(MatchState state)
         {
             state.AttackStack += CardCatalog.AttackSpear;
-            state.SpearInStack = true;
             state.AttackDefendSuit = null;
             state.AttackDefendColor = null;
             state.AttackDefendRank = null;
         }
 
-        /// <summary>2·A → 문양 방어·같은 랭크 스택, 조커 → 색 방어. 패스·역날검 시 유지된다.</summary>
+        /// <summary>공개 top이 죽창이고 공격 중이면 SpearInStack.</summary>
+        private static void RefreshSpearOnTop(MatchState state)
+        {
+            state.SpearInStack = state.AttackStack > 0 && state.DiscardTop.Def.Spec == SpecKind.Spear;
+        }
+
+        /// <summary>2·A → 문양 방어·같은 랭크 또는 같은 문양 스택, 조커 → 색 방어. 패스·역날검 시 유지된다.</summary>
         private static void SetAttackDefend(MatchState state, CardDef card)
         {
             if (card.IsJoker)
@@ -663,7 +708,7 @@ namespace Game.Rules
             }
         }
 
-        /// <summary>역날검: 직전 활성에게 2×스택 새 응답. 체인당 1회. 죽창 속성은 유지.</summary>
+        /// <summary>역날검: 직전 활성에게 2×스택 새 응답. 체인당 1회.</summary>
         private static void ApplyCounter(MatchState state)
         {
             state.AttackStack *= 2;
@@ -877,6 +922,11 @@ namespace Game.Rules
                 return GiveCards(state, seat, PickInstanceIds(state.Hands[seat], fromHand, highestFirst: true));
             }
 
+            if (state.QueenStack > 0 && !state.PendingGiveSeat.HasValue)
+            {
+                return AcceptQueen(state, seat);
+            }
+
             if (state.PendingKingModeSeat == seat)
             {
                 return EndKingOnly(state, seat);
@@ -947,6 +997,11 @@ namespace Game.Rules
             {
                 ApplyTimeoutDefault(state, seat);
                 return;
+            }
+
+            if (state.QueenStack > 0 && !state.PendingGiveSeat.HasValue && state.CurrentSeat == seat)
+            {
+                ClearQueenChain(state);
             }
 
             if (state.CurrentSeat == seat)
@@ -1157,7 +1212,8 @@ namespace Game.Rules
         {
             if (state.AttackStack > 0)
             {
-                if ((card.Rank == Rank.Three || card.Rank == Rank.Four) && state.SpearInStack)
+                if ((card.Rank == Rank.Three || card.Rank == Rank.Four)
+                    && state.DiscardTop.Def.Spec == SpecKind.Spear)
                 {
                     return RejectCode.SpearNotDefendable;
                 }
