@@ -15,8 +15,38 @@ MonoBehaviour:
   m_GroupName: UI
   m_GUID: b48e10bce2f495d47ae298b92231fb02
   m_SerializeEntries:
+  - m_GUID: 23d8f96492b5e8040a12700a333dd0f2
+    m_Address: UI/RoomPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7fb744c87e0f93c4aa018bbb46417093
+    m_Address: UI/TitlePanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acec3105db90a3f438b6f92ba8da2ab7
+    m_Address: UI/ResultPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: be0a28a6dd994184da2f304cfccfdfc8
     m_Address: UI
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bf1bec1c1c5bf6845afba56d9a0af998
+    m_Address: UI/LobbyPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea2b88c3385fad84190d009c26181be3
+    m_Address: UI/MatchPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe9a63cade8d5da458dd74bd5637bc9f
+    m_Address: UI/SettingsPopup.prefab
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

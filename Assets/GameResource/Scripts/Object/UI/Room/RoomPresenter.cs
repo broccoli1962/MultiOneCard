@@ -327,16 +327,22 @@ namespace Backend.Object.UI
             {
                 var nick = ResolveNick(ev.seat);
                 View.Chat.Append(ev.chatType, nick, ev.text, ev.quickId);
+                if (ShouldNotifyChat(ev.seat, ev.chatType))
+                {
+                    View.NotifyChatArrived();
+                }
             }
 
             if (ev.ev == EvCode.PlayerDisconnected)
             {
                 View.Chat.Append(ChatType.System, null, ResolveNick(ev.seat) + " 연결 끊김", null);
+                View.NotifyChatArrived();
             }
 
             if (ev.ev == EvCode.PlayerRejoined)
             {
                 View.Chat.Append(ChatType.System, null, ResolveNick(ev.seat) + " 재접속", null);
+                View.NotifyChatArrived();
             }
 
             if (ev.ev == EvCode.MatchStarted)
@@ -491,6 +497,16 @@ namespace Backend.Object.UI
             client.Chat(text, ChatChannel.Room, quickId);
             View.Chat.ClearInput();
             Refresh();
+        }
+
+        private bool ShouldNotifyChat(int seat, string chatType)
+        {
+            if (chatType == ChatType.System)
+            {
+                return true;
+            }
+
+            return _localSeat < 0 || seat != _localSeat;
         }
 
         private void Refresh()

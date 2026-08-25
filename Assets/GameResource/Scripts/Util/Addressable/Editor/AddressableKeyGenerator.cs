@@ -93,6 +93,13 @@ namespace Backend.Editor
                             if (resolveEntry == null || string.IsNullOrEmpty(resolveEntry.address))
                                 continue;
 
+                            if (group.Name == "Cards")
+                            {
+                                finalKeyName = KeyNameForEntry(group.Name, resolveEntry.address);
+                                if (!generatedKeys.Add(finalKeyName))
+                                    continue;
+                            }
+
                             // 폴더로 넣었을 때 내부 에셋의 어드레스는 '전체 경로'임
                             sb.AppendLine($"{tap}            {{ \"{finalKeyName}\", \"{resolveEntry.address}\" }},");
                         }
@@ -100,7 +107,7 @@ namespace Backend.Editor
                     else
                     {
                         // 💡 엔트리가 '개별 파일'인 경우 기존 로직
-                        string keyName = FormatName(entry.address);
+                        string keyName = KeyNameForEntry(group.Name, entry.address);
                         if (!generatedKeys.Contains(keyName))
                         {
                             generatedKeys.Add(keyName);
@@ -135,6 +142,16 @@ namespace Backend.Editor
             AssetDatabase.Refresh();
 
             Debug.Log($"[Addressables] {relativePath} 생성 완료!");
+        }
+
+        private static string KeyNameForEntry(string groupName, string address)
+        {
+            if (groupName == "Cards" && !string.IsNullOrEmpty(address) && address.StartsWith("Cards/"))
+            {
+                return address.Substring("Cards/".Length);
+            }
+
+            return FormatName(address);
         }
 
         private static string FormatName(string name)

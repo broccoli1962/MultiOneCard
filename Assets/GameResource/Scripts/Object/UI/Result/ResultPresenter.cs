@@ -7,7 +7,7 @@ namespace Backend.Object.UI
 {
     /// <summary>
     /// 결과·재대결. 투표는 <see cref="NetClient.RematchVote"/> 로만 보내고 순위는 판결하지 않는다.
-    /// 20초 미투표는 반대로 보낸다.
+    /// 재대결 찬성 시 화면을 유지하고 전원 동의까지 기다린다. 20초 미투표는 반대로 보낸다.
     /// </summary>
     public sealed class ResultPresenter : UIPresenter<ResultPanel>
     {
@@ -82,13 +82,9 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (RemainSeconds() <= 0)
+            if (RemainSeconds() <= 0 && !_voted)
             {
-                if (!_voted)
-                {
-                    Vote(false);
-                }
-
+                Vote(false);
                 Finish();
                 return;
             }
@@ -116,7 +112,6 @@ namespace Backend.Object.UI
         private void OnYesClicked()
         {
             Vote(true);
-            Finish();
         }
 
         private void OnNoClicked()

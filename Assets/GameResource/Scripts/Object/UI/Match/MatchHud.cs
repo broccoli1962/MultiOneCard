@@ -1,16 +1,17 @@
 using Backend.Net;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Backend.Object.UI
 {
     /// <summary>
-    /// 매치 HUD. 턴·초·방향, 요구 무늬, 공격/Q 스택, 조커값 흑/빨/파, 알약, 덱 장수만 표시한다.
+    /// 매치 HUD. 낼 사람(닉네임), 최근 카드, 남은 초, 방향만 표시한다.
     /// </summary>
     public sealed class MatchHud : UIView
     {
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _hudText;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _hudText;
 
         private bool _layoutReady;
         private long _deadlineMs;
@@ -19,7 +20,7 @@ namespace Backend.Object.UI
         /// <summary>
         /// 프리팹 자식에 묶인 HUD 텍스트를 찾는다.
         /// </summary>
-        public void EnsureLayout(Font font)
+        public void EnsureLayout(TMP_FontAsset font)
         {
             if (font != null)
             {
@@ -32,17 +33,29 @@ namespace Backend.Object.UI
             }
 
             _hudText ??= FindOrCreateText("HudText");
+            if (_hudText != null)
+            {
+                _hudText.textWrappingMode = TextWrappingModes.Normal;
+                _hudText.overflowMode = TextOverflowModes.Overflow;
+                _hudText.raycastTarget = false;
+                if (_font != null)
+                {
+                    _hudText.font = _font;
+                }
+            }
+
             _layoutReady = true;
         }
 
         /// <summary>
-        /// 공개 매치 뷰를 HUD 문구로 그린다. 초는 <see cref="Tick"/> 이 갱신한다.
+        /// 공개 매치 뷰와 최근 수를 HUD 문구로 그린다. 초는 <see cref="Tick"/> 이 갱신한다.
         /// </summary>
-        public void Bind(PublicMatchView match, int viewingSeat)
+        public void Bind(PublicMatchView match, string lastPlay, string[] nicks = null)
         {
             EnsureLayout(_font);
             _deadlineMs = match != null ? match.deadlineMs : 0;
-            _hudBase = FormatHud(match, viewingSeat);
+            _hudBase = FormatHud(match, lastPlay, nicks);
+            SetDirIcons(match);
             RefreshTimer();
         }
 
@@ -70,47 +83,52 @@ namespace Backend.Object.UI
 
             _hudText.text = string.IsNullOrEmpty(_hudBase)
                 ? string.Empty
-                : $"{_hudBase} {remain}초";
+                : $"{_hudBase}\n{remain}초";
         }
 
-        private static string FormatHud(PublicMatchView match, int viewingSeat)
+        private static string FormatHud(PublicMatchView match, string lastPlay, string[] nicks)
         {
             if (match == null)
             {
                 return "대기";
             }
 
-            var dir = match.direction < 0 ? "시계" : "반시계";
-            var suit = string.IsNullOrEmpty(match.requiredSuit) ? "-" : match.requiredSuit;
-            var pill = FormatPill(match.requiredColor);
-            var spear = match.spearInStack ? "죽창" : string.Empty;
-            return $"보기P{viewingSeat} 턴P{match.currentSeat} {dir} 무늬{suit} 공격+{match.attackStack}{spear} Q×{match.queenStack} 흑{match.jokerBw} 빨{match.jokerColor} 파{match.jokerMoon} 알약{pill} 덱{match.deckCount}";
+            var clockwise = match.direction < 0;
+            var dir = clockwise ? "시계" : "반시계";
+            var recent = string.IsNullOrEmpty(lastPlay) ? "아직 낸 장 없음" : lastPlay;
+            return $"턴 {NickOf(nicks, match.currentSeat)}\n최근 {recent}\n{dir}";
         }
 
-        private static string FormatPill(string requiredColor)
+        private void SetDirIcons(PublicMatchView match)
         {
-            if (requiredColor == ColorCode.Black)
+            var cw = CachedTransform.Find("DirCW");
+            var ccw = CachedTransform.Find("DirCCW");
+            var show = match != null;
+            if (cw != null)
             {
-                return "흑";
+                cw.gameObject.SetActive(show && match.direction < 0);
             }
 
-            if (requiredColor == ColorCode.Red)
+            if (ccw != null)
             {
-                return "빨";
+                ccw.gameObject.SetActive(show && match.direction >= 0);
             }
-
-            if (requiredColor == ColorCode.Blue)
-            {
-                return "파";
-            }
-
-            return "-";
         }
 
-        private Text FindOrCreateText(string name)
+        private static string NickOf(string[] nicks, int seat)
+        {
+            if (nicks != null && seat >= 0 && seat < nicks.Length && !string.IsNullOrEmpty(nicks[seat]))
+            {
+                return nicks[seat];
+            }
+
+            return "P" + seat;
+        }
+
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var existing = CachedTransform.Find(name);
-            return existing != null && existing.TryGetComponent(out Text text) ? text : null;
+            return existing != null && existing.TryGetComponent(out TextMeshProUGUI text) ? text : null;
         }
     }
 }

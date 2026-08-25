@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,11 +10,11 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class ResultPanel : UIPanel<ResultPresenter>
     {
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _titleText;
-        [SerializeField] private Text _rankText;
-        [SerializeField] private Text _timerText;
-        [SerializeField] private Text _statusText;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _titleText;
+        [SerializeField] private TextMeshProUGUI _rankText;
+        [SerializeField] private TextMeshProUGUI _timerText;
+        [SerializeField] private TextMeshProUGUI _statusText;
         [SerializeField] private CommonButton _yesButton;
         [SerializeField] private CommonButton _noButton;
 
@@ -85,14 +86,18 @@ namespace Backend.Object.UI
 
             if (_statusText != null)
             {
-                if (!voted)
-                {
-                    _statusText.text = "미투표는 반대";
-                }
-                else
-                {
-                    _statusText.text = voteYes ? "재대결 찬성" : "재대결 반대";
-                }
+            if (!voted)
+            {
+                _statusText.text = "미투표는 반대";
+            }
+            else if (voteYes)
+            {
+                _statusText.text = "다시하기 요청중";
+            }
+            else
+            {
+                _statusText.text = "재대결 반대";
+            }
             }
 
             if (_yesButton != null)
@@ -115,10 +120,10 @@ namespace Backend.Object.UI
             return false;
         }
 
-        private Text FindOrCreateText(string name)
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out Text text) ? text : null;
+            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
         }
 
         private CommonButton FindOrCreateButton(string name)

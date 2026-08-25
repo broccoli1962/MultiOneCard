@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,14 +10,18 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class TitlePanel : UIPanel<TitlePresenter>
     {
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _titleText;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _titleText;
         [SerializeField] private CommonButton _startButton;
+        [SerializeField] private CommonButton _settingsButton;
 
         private bool _layoutReady;
 
         /// <summary>로비로 진입하는 시작 버튼.</summary>
         public event Action StartClicked;
+
+        /// <summary>설정 팝업.</summary>
+        public event Action SettingsClicked;
 
         protected override void Awake()
         {
@@ -40,14 +45,16 @@ namespace Backend.Object.UI
 
             _titleText ??= FindOrCreateText("Title");
             _startButton ??= FindOrCreateButton("Start");
+            _settingsButton ??= FindOrCreateButton("Settings");
             BindButton(_startButton, () => StartClicked?.Invoke());
+            BindButton(_settingsButton, () => SettingsClicked?.Invoke());
             _layoutReady = true;
         }
 
-        private Text FindOrCreateText(string name)
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out Text text) ? text : null;
+            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
         }
 
         private CommonButton FindOrCreateButton(string name)

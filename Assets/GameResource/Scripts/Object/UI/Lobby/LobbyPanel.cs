@@ -1,4 +1,6 @@
 using System;
+using Backend.Object.Management;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,22 +11,30 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class LobbyPanel : UIPanel<LobbyPresenter>
     {
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _titleText;
-        [SerializeField] private Text _statusText;
-        [SerializeField] private InputField _nickInput;
-        [SerializeField] private InputField _roomCodeInput;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _titleText;
+        [SerializeField] private TextMeshProUGUI _statusText;
+        [SerializeField] private TMP_InputField _nickInput;
+        [SerializeField] private TMP_InputField _lanHostInput;
+        [SerializeField] private TMP_InputField _roomCodeInput;
         [SerializeField] private CommonButton _quickMatch2Button;
         [SerializeField] private CommonButton _quickMatch4Button;
         [SerializeField] private CommonButton _quickMatch6Button;
         [SerializeField] private CommonButton _createRoomButton;
         [SerializeField] private CommonButton _joinRoomButton;
         [SerializeField] private CommonButton _backButton;
+        [SerializeField] private CommonButton _settingsButton;
+        [SerializeField] private CommonButton _modeRelayButton;
+        [SerializeField] private CommonButton _modeLanButton;
 
+        private TextMeshProUGUI _lanHostLabel;
         private bool _layoutReady;
 
         /// <summary>닉 입력 변경.</summary>
         public event Action<string> NickChanged;
+
+        /// <summary>LAN 호스트 IP 입력 변경.</summary>
+        public event Action<string> LanHostChanged;
 
         /// <summary>퀵매치 인원. 2/4/6.</summary>
         public event Action<int> QuickMatchClicked;
@@ -37,6 +47,12 @@ namespace Backend.Object.UI
 
         /// <summary>타이틀로 돌아가기.</summary>
         public event Action BackClicked;
+
+        /// <summary>설정 팝업.</summary>
+        public event Action SettingsClicked;
+
+        /// <summary>접속 경로.</summary>
+        public event Action<ConnectionMode> ModeClicked;
 
         /// <summary>현재 닉 입력.</summary>
         public string NickText => _nickInput != null ? _nickInput.text : string.Empty;
@@ -68,6 +84,8 @@ namespace Backend.Object.UI
 
             _titleText ??= FindOrCreateText("Title");
             _nickInput ??= FindOrCreateInput("NickInput");
+            _lanHostInput ??= FindOrCreateInput("ServerUrlInput");
+            _lanHostLabel ??= FindOrCreateText("ServerUrlLabel");
             _quickMatch2Button ??= FindOrCreateButton("Quick2");
             _quickMatch4Button ??= FindOrCreateButton("Quick4");
             _quickMatch6Button ??= FindOrCreateButton("Quick6");
@@ -76,14 +94,21 @@ namespace Backend.Object.UI
             _joinRoomButton ??= FindOrCreateButton("JoinRoom");
             _statusText ??= FindOrCreateText("Status");
             _backButton ??= FindOrCreateButton("Back");
+            _settingsButton ??= FindOrCreateButton("Settings");
+            _modeRelayButton ??= FindOrCreateButton("ModeRelay");
+            _modeLanButton ??= FindOrCreateButton("ModeLan");
 
             BindInput(_nickInput, value => NickChanged?.Invoke(value));
+            BindInputEnd(_lanHostInput, value => LanHostChanged?.Invoke(value));
             BindButton(_quickMatch2Button, () => QuickMatchClicked?.Invoke(2));
             BindButton(_quickMatch4Button, () => QuickMatchClicked?.Invoke(4));
             BindButton(_quickMatch6Button, () => QuickMatchClicked?.Invoke(6));
             BindButton(_createRoomButton, () => CreateRoomClicked?.Invoke());
             BindButton(_joinRoomButton, () => JoinRoomClicked?.Invoke());
             BindButton(_backButton, () => BackClicked?.Invoke());
+            BindButton(_settingsButton, () => SettingsClicked?.Invoke());
+            BindButton(_modeRelayButton, () => ModeClicked?.Invoke(ConnectionMode.Relay));
+            BindButton(_modeLanButton, () => ModeClicked?.Invoke(ConnectionMode.Lan));
 
             _layoutReady = true;
         }
@@ -101,6 +126,29 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
+        /// 저장된 LAN 호스트 IP를 입력칸에 채운다.
+        /// </summary>
+        public void SetLanHost(string host)
+        {
+            EnsureLayout();
+            if (_lanHostInput != null)
+            {
+                _lanHostInput.SetTextWithoutNotify(host ?? string.Empty);
+            }
+        }
+
+        /// <summary>
+        /// 선택된 접속 경로 버튼을 강조하고 LAN IP 입력 표시를 맞춘다.
+        /// </summary>
+        public void SetMode(ConnectionMode mode)
+        {
+            EnsureLayout();
+            Highlight(_modeRelayButton, mode == ConnectionMode.Relay);
+            Highlight(_modeLanButton, mode == ConnectionMode.Lan);
+            SetLanHostVisible(mode == ConnectionMode.Lan);
+        }
+
+        /// <summary>
         /// 상태 문구를 표시한다.
         /// </summary>
         public void SetStatus(string status)
@@ -112,16 +160,29 @@ namespace Backend.Object.UI
             }
         }
 
-        private Text FindOrCreateText(string name)
+        private void SetLanHostVisible(bool visible)
         {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out Text text) ? text : null;
+            if (_lanHostInput != null)
+            {
+                _lanHostInput.gameObject.SetActive(visible);
+            }
+
+            if (_lanHostLabel != null)
+            {
+                _lanHostLabel.gameObject.SetActive(visible);
+            }
         }
 
-        private InputField FindOrCreateInput(string name)
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out InputField input) ? input : null;
+            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
+        }
+
+        private TMP_InputField FindOrCreateInput(string name)
+        {
+            var go = FindOrCreate(name);
+            return go != null && go.TryGetComponent(out TMP_InputField input) ? input : null;
         }
 
         private CommonButton FindOrCreateButton(string name)
@@ -153,7 +214,7 @@ namespace Backend.Object.UI
             button.OnClick.AddListener(action);
         }
 
-        private static void BindInput(InputField input, UnityEngine.Events.UnityAction<string> action)
+        private static void BindInput(TMP_InputField input, UnityEngine.Events.UnityAction<string> action)
         {
             if (input == null)
             {
@@ -162,6 +223,27 @@ namespace Backend.Object.UI
 
             input.onValueChanged.RemoveAllListeners();
             input.onValueChanged.AddListener(action);
+        }
+
+        private static void Highlight(CommonButton button, bool selected)
+        {
+            if (button == null || !button.TryGetComponent(out Image image))
+            {
+                return;
+            }
+
+            image.color = selected ? new Color(1f, 0.9f, 0.65f, 1f) : Color.white;
+        }
+
+        private static void BindInputEnd(TMP_InputField input, UnityEngine.Events.UnityAction<string> action)
+        {
+            if (input == null)
+            {
+                return;
+            }
+
+            input.onEndEdit.RemoveAllListeners();
+            input.onEndEdit.AddListener(action);
         }
     }
 }

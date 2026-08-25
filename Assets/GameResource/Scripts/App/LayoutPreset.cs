@@ -129,7 +129,7 @@ namespace Backend.App
         /// </summary>
         public static float HandHeight(LayoutPreset preset)
         {
-            return preset == LayoutPreset.MobilePortrait ? 260f : 220f;
+            return preset == LayoutPreset.MobilePortrait ? 360f : 324f;
         }
 
         /// <summary>
@@ -139,13 +139,13 @@ namespace Backend.App
         {
             if (preset == LayoutPreset.MobilePortrait)
             {
-                width = 140f;
-                height = 196f;
+                width = 108f;
+                height = 151f;
                 return;
             }
 
-            width = 110f;
-            height = 154f;
+            width = 96f;
+            height = 134f;
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace Backend.App
         /// </summary>
         public static float DiscardNormalizedY(LayoutPreset preset)
         {
-            return preset == LayoutPreset.MobilePortrait ? 0.52f : 0.44f;
+            return preset == LayoutPreset.MobilePortrait ? 0.50f : 0.48f;
         }
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace Backend.App
             if (seatCount <= 2)
             {
                 nx = 0.5f;
-                ny = 0.86f;
+                ny = 0.78f;
                 return;
             }
 
@@ -235,7 +235,7 @@ namespace Backend.App
             if (opponentIndex == 1)
             {
                 nx = 0.5f;
-                ny = 0.86f;
+                ny = 0.78f;
                 return;
             }
 

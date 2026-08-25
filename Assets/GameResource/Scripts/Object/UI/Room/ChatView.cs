@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Backend.Net;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -25,9 +26,9 @@ namespace Backend.Object.UI
 
         private const int VisibleLines = 30;
 
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _logText;
-        [SerializeField] private InputField _input;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _logText;
+        [SerializeField] private TMP_InputField _input;
         [SerializeField] private CommonButton _sendButton;
         [SerializeField] private RectTransform _quickRow;
         [SerializeField] private CommonButton[] _quickButtons = new CommonButton[8];
@@ -47,7 +48,7 @@ namespace Backend.Object.UI
         /// <summary>
         /// 프리팹 자식에 묶인 채팅 위젯을 찾아 이벤트를 묶는다.
         /// </summary>
-        public void EnsureLayout(Font font = null)
+        public void EnsureLayout(TMP_FontAsset font = null)
         {
             if (font != null)
             {
@@ -137,6 +138,23 @@ namespace Backend.Object.UI
             }
 
             return quickId ?? string.Empty;
+        }
+
+        /// <summary>
+        /// 채팅 버튼 레드닷을 켜거나 끈다.
+        /// </summary>
+        public static void SetUnreadDot(CommonButton button, bool unread)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var dot = button.CachedTransform.Find("RedDot");
+            if (dot != null)
+            {
+                dot.gameObject.SetActive(unread);
+            }
         }
 
         private void Update()
@@ -234,16 +252,16 @@ namespace Backend.Object.UI
                 : null;
         }
 
-        private Text FindOrCreateText(string name)
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out Text text) ? text : null;
+            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
         }
 
-        private InputField FindOrCreateInput(string name)
+        private TMP_InputField FindOrCreateInput(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out InputField input) ? input : null;
+            return go != null && go.TryGetComponent(out TMP_InputField input) ? input : null;
         }
 
         private CommonButton FindOrCreateButton(string name)
@@ -293,7 +311,7 @@ namespace Backend.Object.UI
             button.OnClick.AddListener(action);
         }
 
-        private static void BindInputEndEdit(InputField input, UnityEngine.Events.UnityAction<string> action)
+        private static void BindInputEndEdit(TMP_InputField input, UnityEngine.Events.UnityAction<string> action)
         {
             if (input == null)
             {

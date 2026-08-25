@@ -1,5 +1,6 @@
 using System;
 using Backend.Net;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,19 +13,20 @@ namespace Backend.Object.UI
     {
         private const int MaxSlots = 6;
 
-        [SerializeField] private Font _font;
-        [SerializeField] private Text _titleText;
-        [SerializeField] private Text _roomCodeText;
-        [SerializeField] private Text _statusText;
-        [SerializeField] private Text _rulesText;
+        [SerializeField] private TMP_FontAsset _font;
+        [SerializeField] private TextMeshProUGUI _titleText;
+        [SerializeField] private TextMeshProUGUI _roomCodeText;
+        [SerializeField] private TextMeshProUGUI _statusText;
+        [SerializeField] private TextMeshProUGUI _rulesText;
         [SerializeField] private GameObject _rulesRoot;
         [SerializeField] private ChatView _chatView;
         [SerializeField] private CommonButton _readyButton;
         [SerializeField] private CommonButton _startButton;
         [SerializeField] private CommonButton _rulesButton;
+        [SerializeField] private CommonButton _chatButton;
         [SerializeField] private CommonButton _backButton;
         [SerializeField] private CommonButton[] _slotButtons = new CommonButton[MaxSlots];
-        [SerializeField] private Text[] _slotTexts = new Text[MaxSlots];
+        [SerializeField] private TextMeshProUGUI[] _slotTexts = new TextMeshProUGUI[MaxSlots];
 
         private bool _layoutReady;
 
@@ -36,6 +38,9 @@ namespace Backend.Object.UI
 
         /// <summary>규칙 보기 토글.</summary>
         public event Action RulesClicked;
+
+        /// <summary>채팅 패널 토글.</summary>
+        public event Action ChatClicked;
 
         /// <summary>로비로 돌아가기.</summary>
         public event Action BackClicked;
@@ -79,6 +84,7 @@ namespace Backend.Object.UI
             _readyButton ??= FindOrCreateButton("Ready");
             _startButton ??= FindOrCreateButton("Start");
             _rulesButton ??= FindOrCreateButton("Rules");
+            _chatButton ??= FindOrCreateButton("Chat");
             _statusText ??= FindOrCreateText("Status");
             _backButton ??= FindOrCreateButton("Back");
             _chatView ??= FindOrCreateChat();
@@ -105,6 +111,7 @@ namespace Backend.Object.UI
             BindButton(_readyButton, () => ReadyClicked?.Invoke());
             BindButton(_startButton, () => StartClicked?.Invoke());
             BindButton(_rulesButton, () => RulesClicked?.Invoke());
+            BindButton(_chatButton, () => ChatClicked?.Invoke());
             BindButton(_backButton, () => BackClicked?.Invoke());
             for (var i = 0; i < MaxSlots; i++)
             {
@@ -164,11 +171,18 @@ namespace Backend.Object.UI
                     continue;
                 }
 
-                var nick = room != null && room.nicks != null && i < room.nicks.Length ? room.nicks[i] : "빈 자리";
+                var nick = room != null && room.nicks != null && i < room.nicks.Length && !string.IsNullOrEmpty(room.nicks[i])
+                    ? room.nicks[i]
+                    : "빈 자리";
                 var ready = room != null && room.ready != null && i < room.ready.Length && room.ready[i];
                 var host = room != null && i == room.hostSeat;
                 var mine = i == localSeat;
                 slotText.text = $"좌석{i + 1}  {nick}  {(ready ? "준비" : "대기")}{(host ? " 방장" : string.Empty)}{(mine ? " 나" : string.Empty)}";
+                var hostIcon = button != null ? button.CachedTransform.Find("HostIcon") : null;
+                if (hostIcon != null)
+                {
+                    hostIcon.gameObject.SetActive(host);
+                }
             }
 
             var localReady = room != null && room.ready != null && localSeat >= 0 && localSeat < room.ready.Length
@@ -189,6 +203,35 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
+        /// 채팅 패널을 보이거나 숨긴다. 토글 버튼은 항상 켠다.
+        /// </summary>
+        public void SetChatVisible(bool visible)
+        {
+            EnsureLayout();
+            if (_chatView != null)
+            {
+                _chatView.CachedGameObject.SetActive(visible);
+            }
+
+            SetChatLabel(visible);
+            ChatView.SetUnreadDot(_chatButton, false);
+        }
+
+        /// <summary>
+        /// 채팅 패널이 닫혀 있을 때 새 메시지 레드닷을 켠다.
+        /// </summary>
+        public void NotifyChatArrived()
+        {
+            EnsureLayout();
+            if (_chatView != null && _chatView.CachedGameObject.activeSelf)
+            {
+                return;
+            }
+
+            ChatView.SetUnreadDot(_chatButton, true);
+        }
+
+        /// <summary>
         /// 상태 문구를 표시한다.
         /// </summary>
         public void SetStatus(string status)
@@ -200,6 +243,20 @@ namespace Backend.Object.UI
             }
         }
 
+        private void SetChatLabel(bool visible)
+        {
+            if (_chatButton == null)
+            {
+                return;
+            }
+
+            var label = _chatButton.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (label != null)
+            {
+                label.text = visible ? "채팅 닫기" : "채팅";
+            }
+        }
+
         private void SetReadyLabel(bool ready)
         {
             if (_readyButton == null)
@@ -207,7 +264,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var label = _readyButton.GetComponentInChildren<Text>();
+            var label = _readyButton.GetComponentInChildren<TextMeshProUGUI>(true);
             if (label != null)
             {
                 label.text = ready ? "준비됨" : "준비";
@@ -223,7 +280,7 @@ namespace Backend.Object.UI
 
             if (_slotTexts == null || _slotTexts.Length != MaxSlots)
             {
-                _slotTexts = new Text[MaxSlots];
+                _slotTexts = new TextMeshProUGUI[MaxSlots];
             }
 
             for (var i = 0; i < MaxSlots; i++)
@@ -231,7 +288,7 @@ namespace Backend.Object.UI
                 _slotButtons[i] ??= FindOrCreateButton("Slot" + i);
                 if (_slotTexts[i] == null && _slotButtons[i] != null)
                 {
-                    _slotTexts[i] = _slotButtons[i].GetComponentInChildren<Text>();
+                    _slotTexts[i] = _slotButtons[i].GetComponentInChildren<TextMeshProUGUI>(true);
                 }
             }
         }
@@ -243,7 +300,7 @@ namespace Backend.Object.UI
                 : null;
         }
 
-        private Text SlotText(int index)
+        private TextMeshProUGUI SlotText(int index)
         {
             return _slotTexts != null && index >= 0 && index < _slotTexts.Length
                 ? _slotTexts[index]
@@ -256,10 +313,10 @@ namespace Backend.Object.UI
             return go != null && go.TryGetComponent(out ChatView chat) ? chat : null;
         }
 
-        private Text FindOrCreateText(string name)
+        private TextMeshProUGUI FindOrCreateText(string name)
         {
             var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out Text text) ? text : null;
+            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
         }
 
         private CommonButton FindOrCreateButton(string name)

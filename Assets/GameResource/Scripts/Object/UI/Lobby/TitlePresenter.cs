@@ -15,6 +15,7 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             View.StartClicked += OnStartClicked;
+            View.SettingsClicked += OnSettingsClicked;
         }
 
         /// <summary>
@@ -28,11 +29,17 @@ namespace Backend.Object.UI
             }
 
             View.StartClicked -= OnStartClicked;
+            View.SettingsClicked -= OnSettingsClicked;
         }
 
         private void OnStartClicked()
         {
             UIManager.OpenAsync<LobbyPanel>().Forget();
+        }
+
+        private void OnSettingsClicked()
+        {
+            UIManager.OpenAsync<SettingsPopup>().Forget();
         }
     }
 }
