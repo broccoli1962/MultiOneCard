@@ -11,11 +11,15 @@ namespace Backend.Object.Management
     public class AudioManager : SingletonGameObject<AudioManager>
     {
         private static readonly string _audioSourcePoolKey = "AudioSource";
-        private readonly List<string> _preloadAudioClipKeys = new() { "popSound" };
+        private readonly List<string> _preloadAudioClipKeys = new() { "Card_Flip" };
+        private AudioSource _runtimeSourcePrefab;
 
         // PlayerPrefs 키
         private const string PREF_BGM_ENABLED = "AudioManager_BgmEnabled";
         private const string PREF_SFX_ENABLED = "AudioManager_SfxEnabled";
+        private const string PREF_BGM_VOLUME = "AudioManager_BgmVolume";
+        private const string PREF_SFX_VOLUME = "AudioManager_SfxVolume";
+        private const float DefaultVolume = 1f;
 
         // 로드된 클립을 캐싱할 딕셔너리
         private readonly Dictionary<string, AudioClip> _clips = new();
@@ -42,7 +46,8 @@ namespace Backend.Object.Management
             set
             {
                 PlayerPrefs.SetInt(PREF_BGM_ENABLED, value ? 1 : 0);
-                ApplyBgmMixerVolume(value);
+                PlayerPrefs.Save();
+                ApplyBgmMixerVolume();
                 if (!value) StopBgmImmediate();
             }
         }
@@ -53,7 +58,36 @@ namespace Backend.Object.Management
             set
             {
                 PlayerPrefs.SetInt(PREF_SFX_ENABLED, value ? 1 : 0);
-                ApplySfxMixerVolume(value);
+                PlayerPrefs.Save();
+                ApplySfxMixerVolume();
+            }
+        }
+
+        /// <summary>
+        /// BGM 볼륨 (0~1). On/Off 와 별도로 저장되며, 켜진 상태에서 Mixer 에 반영됩니다.
+        /// </summary>
+        public float BgmVolume
+        {
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_BGM_VOLUME, DefaultVolume));
+            set
+            {
+                PlayerPrefs.SetFloat(PREF_BGM_VOLUME, Mathf.Clamp01(value));
+                PlayerPrefs.Save();
+                ApplyBgmMixerVolume();
+            }
+        }
+
+        /// <summary>
+        /// SFX 볼륨 (0~1). On/Off 와 별도로 저장되며, 켜진 상태에서 Mixer 에 반영됩니다.
+        /// </summary>
+        public float SfxVolume
+        {
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_SFX_VOLUME, DefaultVolume));
+            set
+            {
+                PlayerPrefs.SetFloat(PREF_SFX_VOLUME, Mathf.Clamp01(value));
+                PlayerPrefs.Save();
+                ApplySfxMixerVolume();
             }
         }
 
@@ -74,6 +108,11 @@ namespace Backend.Object.Management
             if (string.IsNullOrEmpty(key)) return null;
 
             string address = AddressableKeys.Sounds.Get(key);
+            if (string.IsNullOrEmpty(address))
+            {
+                Debug.LogWarning($"[AudioManager] Unknown AudioClip key: {key}");
+                return null;
+            }
 
             // 1. 캐시에서 확인
             if (_clips.TryGetValue(key, out var cachedClip))
@@ -307,34 +346,35 @@ namespace Backend.Object.Management
             _sfxGroup = sfxGroups.Length > 0 ? sfxGroups[0] : null;
 
             // 저장된 On/Off 상태를 Mixer에 반영
-            ApplyBgmMixerVolume(IsBgmEnabled);
-            ApplySfxMixerVolume(IsSfxEnabled);
+            ApplyBgmMixerVolume();
+            ApplySfxMixerVolume();
         }
 
-        private void ApplyBgmMixerVolume(bool enabled)
+        private void ApplyBgmMixerVolume()
         {
             if (_mixer == null) return;
-            _mixer.SetFloat(MIXER_BGM_PARAM, enabled ? 0f : -80f);
+            _mixer.SetFloat(MIXER_BGM_PARAM, IsBgmEnabled ? LinearToDb(BgmVolume) : -80f);
         }
 
-        private void ApplySfxMixerVolume(bool enabled)
+        private void ApplySfxMixerVolume()
         {
             if (_mixer == null) return;
-            _mixer.SetFloat(MIXER_SFX_PARAM, enabled ? 0f : -80f);
+            _mixer.SetFloat(MIXER_SFX_PARAM, IsSfxEnabled ? LinearToDb(SfxVolume) : -80f);
         }
 
         private void SetBgmVolume_Internal(float linear)
         {
-            if (_mixer == null) return;
-            float db = Mathf.Log10(Mathf.Max(linear, 0.0001f)) * 20f;
-            _mixer.SetFloat(MIXER_BGM_PARAM, db);
+            BgmVolume = linear;
         }
 
         private void SetSfxVolume_Internal(float linear)
         {
-            if (_mixer == null) return;
-            float db = Mathf.Log10(Mathf.Max(linear, 0.0001f)) * 20f;
-            _mixer.SetFloat(MIXER_SFX_PARAM, db);
+            SfxVolume = linear;
+        }
+
+        private static float LinearToDb(float linear)
+        {
+            return Mathf.Log10(Mathf.Max(linear, 0.0001f)) * 20f;
         }
 
         #endregion
@@ -343,13 +383,39 @@ namespace Backend.Object.Management
 
         private async UniTask<AudioSource> GetOrCreateAudioSource()
         {
-            var pool = await ObjectPoolManager.GetOrCreatePoolAsync<AudioSource>(AddressableKeys.InGame.Get(_audioSourcePoolKey), defaultCapacity: 8, maxSize: 20);
-            if (pool == null)
+            var existing = ObjectPoolManager.GetPool<AudioSource>();
+            if (existing != null)
             {
-                Debug.LogError($"[AudioManager] Failed to get AudioSource from PoolManager: {_audioSourcePoolKey}");
-                return null;
+                return existing.Get();
             }
-            return pool.Get();
+
+            var address = AddressableKeys.InGame.Get(_audioSourcePoolKey);
+            if (!string.IsNullOrEmpty(address))
+            {
+                var pool = await ObjectPoolManager.GetOrCreatePoolAsync<AudioSource>(address, defaultCapacity: 8, maxSize: 20);
+                if (pool != null)
+                {
+                    return pool.Get();
+                }
+
+                Debug.LogError($"[AudioManager] Failed to get AudioSource from PoolManager: {_audioSourcePoolKey}");
+            }
+
+            return CreateRuntimeAudioSource();
+        }
+
+        private AudioSource CreateRuntimeAudioSource()
+        {
+            if (_runtimeSourcePrefab == null)
+            {
+                var go = new GameObject("AudioSource");
+                go.SetActive(false);
+                go.transform.SetParent(transform, false);
+                _runtimeSourcePrefab = go.AddComponent<AudioSource>();
+                _runtimeSourcePrefab.playOnAwake = false;
+            }
+
+            return ObjectPoolManager.GetOrCreatePool(_runtimeSourcePrefab, transform, 8, 20).Get();
         }
 
         private async UniTaskVoid PreloadAudioClip_Internal(){
@@ -398,6 +464,16 @@ namespace Backend.Object.Management
         /// SFX 볼륨을 설정합니다 (0~1 선형 값, 내부적으로 dB 변환).
         /// </summary>
         public static void SetSfxVolume(float linear) => Instance.SetSfxVolume_Internal(linear);
+
+        /// <summary>
+        /// 저장된 BGM 볼륨 (0~1)을 반환합니다.
+        /// </summary>
+        public static float GetBgmVolume() => Instance.BgmVolume;
+
+        /// <summary>
+        /// 저장된 SFX 볼륨 (0~1)을 반환합니다.
+        /// </summary>
+        public static float GetSfxVolume() => Instance.SfxVolume;
 
         /// <summary>
         /// BGM 재생 (페이드 인 적용)

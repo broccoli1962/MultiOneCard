@@ -3,7 +3,7 @@ using System;
 namespace Backend.Net
 {
     /// <summary>
-        /// 커맨드를 보내고 이벤트를 받는 전송. LocalLoopback 또는 <see cref="WsNetClient"/>.
+    /// 커맨드를 보내고 이벤트를 받는 전송. LocalLoopback 또는 NGO PlayClientTransport.
     /// </summary>
     public interface INetTransport
     {

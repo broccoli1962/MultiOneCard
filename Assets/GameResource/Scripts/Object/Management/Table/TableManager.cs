@@ -1,6 +1,4 @@
 using Backend.Util.Management;
-using TableData;
-using UnityEngine;
 
 namespace Backend.Object.Management
 {

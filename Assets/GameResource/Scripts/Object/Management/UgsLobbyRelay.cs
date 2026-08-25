@@ -22,6 +22,7 @@ namespace Backend.Object.Management
         private static ISession _hosted;
         private static ISession _joined;
         private static int _hostedCount;
+        private static bool _heartbeatBusy;
 
         /// <summary>Unity Cloud 프로젝트가 연결되어 있는지.</summary>
         public static bool IsProjectLinked => !string.IsNullOrEmpty(Application.cloudProjectId);
@@ -217,11 +218,12 @@ namespace Backend.Object.Management
         /// <summary>호스트 세션을 한 번 갱신한다. SDK 하트비트와 별개.</summary>
         public static async Task HeartbeatHostedAsync()
         {
-            if (_hosted == null)
+            if (_hosted == null || _heartbeatBusy)
             {
                 return;
             }
 
+            _heartbeatBusy = true;
             try
             {
                 await _hosted.RefreshAsync();
@@ -229,6 +231,10 @@ namespace Backend.Object.Management
             }
             catch (Exception)
             {
+            }
+            finally
+            {
+                _heartbeatBusy = false;
             }
         }
 

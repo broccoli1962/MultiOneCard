@@ -70,6 +70,9 @@ namespace Backend.Net
         public string discardTop;
         public string requiredSuit;
         public string requiredColor;
+        public string attackDefendSuit;
+        public string attackDefendColor;
+        public string attackDefendRank;
         public int jokerColor;
         public int jokerBw;
         public int jokerMoon;
@@ -80,8 +83,10 @@ namespace Backend.Net
         public int attackStack;
         public bool spearInStack;
         public int queenStack;
+        public bool pendingGive;
         public int deckCount;
         public string[] recentDiscard;
+        public bool jokerDefendable;
     }
 
     /// <summary>RoomUpdated 페이로드.</summary>

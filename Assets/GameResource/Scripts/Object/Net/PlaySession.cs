@@ -41,8 +41,8 @@ namespace Backend.Object.Net
             string roomCode,
             int seatCount)
         {
-            Stop();
-            EnsureNetwork(nick);
+            await StopAsync();
+            await EnsureNetworkAsync(nick);
             try
             {
                 var effectiveCode = roomCode;
@@ -65,7 +65,7 @@ namespace Backend.Object.Net
             }
             catch
             {
-                Stop();
+                await StopAsync();
                 throw;
             }
         }
@@ -76,8 +76,8 @@ namespace Backend.Object.Net
             string nick,
             string roomCode)
         {
-            Stop();
-            EnsureNetwork(nick);
+            await StopAsync();
+            await EnsureNetworkAsync(nick);
             try
             {
                 if (mode == ConnectionMode.Relay)
@@ -99,7 +99,7 @@ namespace Backend.Object.Net
             }
             catch
             {
-                Stop();
+                await StopAsync();
                 throw;
             }
         }
@@ -114,6 +114,15 @@ namespace Backend.Object.Net
         /// <summary>세션을 닫는다. 매치로 넘길 때는 호출하지 않는다.</summary>
         public static void Stop()
         {
+            StopAsync().Forget();
+        }
+
+        /// <summary>
+        /// NGO·릴레이를 안전하게 내린다.
+        /// DestroyImmediate 는 WSS/Relay 종료 중 메인 스레드를 멈출 수 있어 쓰지 않는다.
+        /// </summary>
+        public static async UniTask StopAsync()
+        {
             if (_guest != null && _nm != null && _nm.CustomMessagingManager != null)
             {
                 _nm.CustomMessagingManager.UnregisterNamedMessageHandler(PlayClientTransport.EventChannel);
@@ -123,27 +132,47 @@ namespace Backend.Object.Net
             _guest = null;
             _host = null;
             var root = _root;
+            var nm = _nm;
             _root = null;
             _nm = null;
+
+            if (nm != null && nm && nm.IsListening)
+            {
+                nm.Shutdown();
+            }
+
             if (root != null)
             {
-                // Destroy 지연이면 다음 EnsureNetwork 의 Singleton 이 옛 인스턴스를 가리킨다.
-                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.Destroy(root);
+                await WaitSingletonClearedAsync();
             }
         }
 
-        /// <summary>이 기기의 LAN IPv4. 없으면 빈 문자열.</summary>
+        /// <summary>이 기기의 LAN IPv4. DNS 조회 없이 어댑터만 본다.</summary>
         public static string LocalIpv4()
         {
             try
             {
-                var host = Dns.GetHostEntry(Dns.GetHostName());
-                for (var i = 0; i < host.AddressList.Length; i++)
+                foreach (var adapter in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    var ip = host.AddressList[i];
-                    if (ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip))
+                    if (adapter.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
                     {
-                        return ip.ToString();
+                        continue;
+                    }
+
+                    if (adapter.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                    {
+                        continue;
+                    }
+
+                    var props = adapter.GetIPProperties();
+                    for (var i = 0; i < props.UnicastAddresses.Count; i++)
+                    {
+                        var addr = props.UnicastAddresses[i].Address;
+                        if (addr.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(addr))
+                        {
+                            return addr.ToString();
+                        }
                     }
                 }
             }
@@ -154,21 +183,9 @@ namespace Backend.Object.Net
             return string.Empty;
         }
 
-        private static void EnsureNetwork(string nick)
+        private static async UniTask EnsureNetworkAsync(string nick)
         {
-            if (NetworkManager.Singleton != null)
-            {
-                var stale = NetworkManager.Singleton;
-                if (stale.IsListening)
-                {
-                    stale.Shutdown();
-                }
-
-                if (stale.gameObject != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(stale.gameObject);
-                }
-            }
+            await ClearStaleSingletonAsync();
 
             _root = new GameObject("PlaySession");
             UnityEngine.Object.DontDestroyOnLoad(_root);
@@ -196,6 +213,36 @@ namespace Backend.Object.Net
             config.ConnectionData = Encoding.UTF8.GetBytes(nick ?? string.Empty);
             _host = _root.AddComponent<PlayHost>();
             _host.Bind(_nm, nick);
+        }
+
+        private static async UniTask ClearStaleSingletonAsync()
+        {
+            var stale = NetworkManager.Singleton;
+            if (stale == null || !stale)
+            {
+                return;
+            }
+
+            if (stale.IsListening)
+            {
+                stale.Shutdown();
+            }
+
+            if (stale.gameObject != null)
+            {
+                UnityEngine.Object.Destroy(stale.gameObject);
+            }
+
+            await WaitSingletonClearedAsync();
+        }
+
+        private static async UniTask WaitSingletonClearedAsync()
+        {
+            await UniTask.Yield();
+            for (var i = 0; i < 30 && NetworkManager.Singleton != null; i++)
+            {
+                await UniTask.Yield();
+            }
         }
 
         private static void ApplyLanHost()

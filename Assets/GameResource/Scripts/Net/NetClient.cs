@@ -17,7 +17,7 @@ namespace Backend.Net
         private static readonly string[] EmptyDefs = Array.Empty<string>();
 
         private readonly INetTransport _transport;
-        private readonly int _seat;
+        private int _seat;
         private readonly List<EventMessage> _recentChat = new List<EventMessage>(ChatHistoryMax);
 
         private int _nextSeq = 1;
@@ -38,6 +38,17 @@ namespace Backend.Net
 
         /// <summary>이 클라의 좌석.</summary>
         public int Seat => _seat;
+
+        /// <summary>서버가 배정한 좌석으로 바꾼다. 이후 커맨드 seat 에 쓴다.</summary>
+        public void AssignSeat(int seat)
+        {
+            if (seat < 0)
+            {
+                return;
+            }
+
+            _seat = seat;
+        }
 
         /// <summary>사용 중인 전송.</summary>
         public INetTransport Transport => _transport;
@@ -277,6 +288,17 @@ namespace Backend.Net
                 return;
             }
 
+            if (ev.ev == EvCode.QueenGiven && ev.fromSeat == _seat)
+            {
+                RemoveHands(ev.instanceIds);
+                return;
+            }
+
+            if (ev.ev == EvCode.KingHidden && ev.seat == _seat)
+            {
+                RemoveHands(ev.instanceIds);
+            }
+
             if (ev.ev == EvCode.Chat)
             {
                 RememberChat(ev);
@@ -299,18 +321,32 @@ namespace Backend.Net
 
             var add = instanceIds.Length;
             var nextIds = new int[_handInstanceIds.Length + add];
-            var nextDefs = new string[_handDefIds.Length + add];
+            var nextDefs = new string[nextIds.Length];
             Array.Copy(_handInstanceIds, nextIds, _handInstanceIds.Length);
-            Array.Copy(_handDefIds, nextDefs, _handDefIds.Length);
+            var oldDefs = _handDefIds.Length < _handInstanceIds.Length ? _handDefIds.Length : _handInstanceIds.Length;
+            Array.Copy(_handDefIds, nextDefs, oldDefs);
             Array.Copy(instanceIds, 0, nextIds, _handInstanceIds.Length, add);
             if (defIds != null)
             {
                 var copyDefs = defIds.Length < add ? defIds.Length : add;
-                Array.Copy(defIds, 0, nextDefs, _handDefIds.Length, copyDefs);
+                Array.Copy(defIds, 0, nextDefs, _handInstanceIds.Length, copyDefs);
             }
 
             _handInstanceIds = nextIds;
             _handDefIds = nextDefs;
+        }
+
+        private void RemoveHands(int[] instanceIds)
+        {
+            if (instanceIds == null || instanceIds.Length == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < instanceIds.Length; i++)
+            {
+                RemoveHand(instanceIds[i]);
+            }
         }
 
         private void RemoveHand(int instanceId)

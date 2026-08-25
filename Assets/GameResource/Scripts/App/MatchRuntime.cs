@@ -563,20 +563,99 @@ namespace Backend.App
                 return;
             }
 
-            _rematchDeadlineMs = 0;
-            _phase = MatchPhase.Waiting;
-            _state = null;
-            _matchEndedEmitted = false;
-            _turnDeadlineMs = 0;
+            var wantRematch = true;
             for (var i = 0; i < SeatCount; i++)
             {
-                _ready[i] = false;
+                if (!_connected[i])
+                {
+                    continue;
+                }
+
+                if (!_rematchVoted[i] || !_rematchYes[i])
+                {
+                    wantRematch = false;
+                    break;
+                }
+            }
+
+            _rematchDeadlineMs = 0;
+            for (var i = 0; i < SeatCount; i++)
+            {
                 _rematchVoted[i] = false;
                 _rematchYes[i] = false;
             }
 
-            var room = Ev(EvCode.RoomUpdated, HostSeat);
-            room.room = BuildRoomView();
+            if (!wantRematch)
+            {
+                _phase = MatchPhase.Waiting;
+                _state = null;
+                _matchEndedEmitted = false;
+                _turnDeadlineMs = 0;
+                for (var i = 0; i < SeatCount; i++)
+                {
+                    _ready[i] = false;
+                }
+
+                var room = Ev(EvCode.RoomUpdated, HostSeat);
+                room.room = BuildRoomView();
+                return;
+            }
+
+            BeginRematchMatch();
+        }
+
+        /// <summary>재대결 찬성 시 새 시드로 즉시 한 판을 연다.</summary>
+        private void BeginRematchMatch()
+        {
+            _seed = unchecked(_seed + System.Environment.TickCount + 1);
+            if (_seed == 0)
+            {
+                _seed = 1;
+            }
+
+            for (var i = 0; i < SeatCount; i++)
+            {
+                _ready[i] = _connected[i];
+            }
+
+            if (!AllConnectedReady() || !TryShrinkToConnectedSeats())
+            {
+                _phase = MatchPhase.Waiting;
+                _state = null;
+                _matchEndedEmitted = false;
+                _turnDeadlineMs = 0;
+                for (var i = 0; i < SeatCount; i++)
+                {
+                    _ready[i] = false;
+                }
+
+                var room = Ev(EvCode.RoomUpdated, HostSeat);
+                room.room = BuildRoomView();
+                return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _phase = MatchPhase.Starting;
+            _state = MatchState.Deal(SeatCount, _seed, _rules);
+            _matchEndedEmitted = false;
+            _turnDeadlineMs = 0;
+            _phase = MatchPhase.InMatch;
+            RefreshTurnDeadline(nowMs);
+
+            var started = Ev(EvCode.MatchStarted, _state.CurrentSeat);
+            started.deadlineMs = _turnDeadlineMs;
+            started.match = BuildPublicMatch();
+
+            for (var seat = 0; seat < SeatCount; seat++)
+            {
+                EmitHandGranted(seat);
+            }
+
+            var jokers = Ev(EvCode.JokerValues, _state.CurrentSeat);
+            FillJokerValues(jokers);
+            EmitTurnChanged(_state.ActingSeat, 0);
+            var roomUpdated = Ev(EvCode.RoomUpdated, HostSeat);
+            roomUpdated.room = BuildRoomView();
         }
 
         private void HandleHeartbeat(CommandMessage command, long nowMs)
@@ -707,34 +786,7 @@ namespace Backend.App
                 var gained = GainedIds(before.HandIds[seat], after.HandIds[seat]);
                 var lost = GainedIds(after.HandIds[seat], before.HandIds[seat]);
 
-                    if (gained.Length > 0)
-                    {
-                        var fromDeck = new List<int>();
-                        var fromSeats = new List<int>();
-                        for (var i = 0; i < gained.Length; i++)
-                        {
-                            if (WasInAnyHand(before, gained[i]) || before.PendingGive >= 0)
-                            {
-                                fromSeats.Add(gained[i]);
-                            }
-                            else
-                            {
-                                fromDeck.Add(gained[i]);
-                            }
-                        }
-
-                    if (fromDeck.Count > 0)
-                    {
-                        EmitCardDrawn(seat, fromDeck);
-                        drewFromDeck[seat] = fromDeck.Count;
-                    }
-
-                    if (fromSeats.Count > 0)
-                    {
-                        EmitCardsReceived(seat, fromSeats);
-                    }
-                }
-
+                // 알약처럼 같은 행동에서 내고 뽑으면, 내기 먼저 보내야 드로우 연출이 취소되지 않는다.
                 for (var i = 0; i < lost.Length; i++)
                 {
                     var id = lost[i];
@@ -742,6 +794,8 @@ namespace Backend.App
                     {
                         var hidden = Ev(EvCode.KingHidden, seat);
                         hidden.ackSeq = ack;
+                        hidden.instanceId = id;
+                        hidden.instanceIds = new[] { id };
                         continue;
                     }
 
@@ -754,6 +808,36 @@ namespace Backend.App
                     played.ackSeq = ack;
                     played.instanceId = id;
                     played.defId = DefIdOf(id);
+                }
+
+                if (gained.Length == 0)
+                {
+                    continue;
+                }
+
+                var fromDeck = new List<int>();
+                var fromSeats = new List<int>();
+                for (var i = 0; i < gained.Length; i++)
+                {
+                    if (WasInAnyHand(before, gained[i]) || before.PendingGive >= 0)
+                    {
+                        fromSeats.Add(gained[i]);
+                    }
+                    else
+                    {
+                        fromDeck.Add(gained[i]);
+                    }
+                }
+
+                if (fromDeck.Count > 0)
+                {
+                    EmitCardDrawn(seat, fromDeck);
+                    drewFromDeck[seat] = fromDeck.Count;
+                }
+
+                if (fromSeats.Count > 0)
+                {
+                    EmitCardsReceived(seat, fromSeats);
                 }
             }
 
@@ -776,13 +860,10 @@ namespace Backend.App
                 given.fromSeat = before.PendingGive >= 0 ? before.PendingGive : before.ActingSeat;
                 given.toSeat = before.GiveTarget >= 0 ? before.GiveTarget : after.ActingSeat;
                 given.count = CountMoved(before, after);
-                // 지급은 CardPlayed 가 아니라서 준 좌석 손패가 클라에 남는다. 양쪽을 HandGranted 로 맞춘다.
-                for (var seat = 0; seat < SeatCount; seat++)
+                // 지급은 CardPlayed 가 아니라서 준 좌석이 손패를 빼려면 instanceIds 가 필요하다.
+                if (given.fromSeat >= 0 && given.fromSeat < before.HandIds.Length)
                 {
-                    if (!SameCounts(before.HandIds[seat], after.HandIds[seat]))
-                    {
-                        EmitHandGranted(seat);
-                    }
+                    given.instanceIds = GainedIds(after.HandIds[given.fromSeat], before.HandIds[given.fromSeat]);
                 }
             }
 
@@ -826,11 +907,12 @@ namespace Backend.App
                 ev.kingMode = after.KingExtra ? KingModeName.Extra : KingModeName.Hide;
             }
 
-            if (before.PendingSuit >= 0 && after.PendingSuit < 0 && after.RequiredSuit != before.RequiredSuit)
+            if (before.PendingSuit >= 0 && after.PendingSuit < 0)
             {
                 var ev = Ev(EvCode.SuitChanged, before.PendingSuit);
                 ev.ackSeq = ack;
                 ev.suit = after.RequiredSuit;
+                ev.match = BuildPublicMatch();
             }
 
             if (before.RequiredColor != after.RequiredColor)
@@ -977,6 +1059,9 @@ namespace Backend.App
                 discardTop = _state.DiscardTop.Def.Id,
                 requiredSuit = ToSuitCode(_state.RequiredSuit),
                 requiredColor = ToColorCode(_state.RequiredColor),
+                attackDefendSuit = ToSuitCode(_state.AttackDefendSuit),
+                attackDefendColor = ToColorCode(_state.AttackDefendColor),
+                attackDefendRank = ToRankCode(_state.AttackDefendRank),
                 jokerColor = _state.JokerAttack.Color,
                 jokerBw = _state.JokerAttack.Bw,
                 jokerMoon = _state.JokerAttack.Moon,
@@ -987,8 +1072,10 @@ namespace Backend.App
                 attackStack = _state.AttackStack,
                 spearInStack = _state.SpearInStack,
                 queenStack = _state.QueenStack,
+                pendingGive = _state.PendingGiveSeat.HasValue,
                 deckCount = _state.Deck.Count,
                 recentDiscard = recentIds,
+                jokerDefendable = _state.Rules.JokerDefendable,
             };
         }
 
@@ -1422,6 +1509,24 @@ namespace Backend.App
                     return ColorCode.Red;
                 case ColorGroup.Blue:
                     return ColorCode.Blue;
+                default:
+                    return null;
+            }
+        }
+
+        private static string ToRankCode(Rank? rank)
+        {
+            if (!rank.HasValue)
+            {
+                return null;
+            }
+
+            switch (rank.Value)
+            {
+                case Rank.Ace:
+                    return RankCode.Ace;
+                case Rank.Two:
+                    return RankCode.Two;
                 default:
                     return null;
             }

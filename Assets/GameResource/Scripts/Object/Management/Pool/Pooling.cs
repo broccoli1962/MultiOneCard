@@ -51,6 +51,12 @@ namespace Backend.Object.Management.Pool
             Action<T> onGet = null, Action<T> onRelease = null, bool collectionCheck = true,
             CancellationToken token = default)
         {
+            if (string.IsNullOrEmpty(addressableKey))
+            {
+                Debug.LogError("[Pooling] Addressable key is null or empty.");
+                return null;
+            }
+
             var handle = Addressables.LoadAssetAsync<GameObject>(addressableKey);
 
             GameObject prefabGameObject;

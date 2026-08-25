@@ -32,8 +32,13 @@ namespace Backend.App
                 match.queenStack,
                 ParseSuit(match.requiredSuit),
                 ParseColor(match.requiredColor),
-                match.spearInStack,
-                counterUsedInChain: false);
+                top.Spec == SpecKind.Spear,
+                false,
+                ParseSuit(match.attackDefendSuit),
+                ParseColor(match.attackDefendColor),
+                match.jokerDefendable,
+                ParseRank(match.attackDefendRank),
+                match.pendingGive);
         }
 
         /// <summary>SuitCode 문자열을 룰 Suit 로 바꾼다.</summary>
@@ -58,6 +63,25 @@ namespace Backend.App
                     return Suit.Star;
                 case SuitCode.Moon:
                     return Suit.Moon;
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>RankCode 문자열을 룰 Rank 로 바꾼다.</summary>
+        public static Rank? ParseRank(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+            {
+                return null;
+            }
+
+            switch (code)
+            {
+                case RankCode.Ace:
+                    return Rank.Ace;
+                case RankCode.Two:
+                    return Rank.Two;
                 default:
                     return null;
             }

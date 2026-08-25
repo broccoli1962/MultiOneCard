@@ -28,8 +28,8 @@ namespace Backend.Net
     /// </summary>
     public static class ProtocolVersion
     {
-        public const int Major = 1;
-        public const int Minor = 0;
+        public const int Major = 2;
+        public const int Minor = 1;
         public const string Region = "ap-northeast";
     }
 
@@ -58,6 +58,13 @@ namespace Backend.Net
     {
         public const string Extra = "Extra";
         public const string Hide = "Hide";
+    }
+
+    /// <summary>attackDefendRank JSON 값. CardDefId 접미 A·2.</summary>
+    public static class RankCode
+    {
+        public const string Ace = "A";
+        public const string Two = "2";
     }
 
     /// <summary>requiredColor / ColorLock JSON 값.</summary>
