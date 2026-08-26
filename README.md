@@ -6,6 +6,9 @@
 
 구현·판정 세부는 [`Docs/spec.md`](Docs/spec.md)가 기준이다.
 
+브라우저 플레이: https://broccoli1962.github.io/MultiOneCard-web/  
+소스 저장소가 private 이라 WebGL 은 공개 저장소 [MultiOneCard-web](https://github.com/broccoli1962/MultiOneCard-web) 으로 호스팅한다.
+
 ---
 
 ## 한 판의 목표
