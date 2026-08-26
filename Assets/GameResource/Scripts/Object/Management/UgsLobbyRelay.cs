@@ -23,6 +23,7 @@ namespace Backend.Object.Management
         private static ISession _joined;
         private static int _hostedCount;
         private static bool _heartbeatBusy;
+        private static string _webAuthProfile;
 
         /// <summary>Unity Cloud 프로젝트가 연결되어 있는지.</summary>
         public static bool IsProjectLinked => !string.IsNullOrEmpty(Application.cloudProjectId);
@@ -53,8 +54,8 @@ namespace Backend.Object.Management
                     "Authentication을 사용할 수 없습니다. Dashboard에서 Player Authentication(Anonymous)을 활성화하세요");
             }
 
-            // 같은 PC에서 에디터+빌드·빌드 2개를 켜면 PlayerPrefs 세션을 공유해
-            // 동일 플레이어로 로비에 두 번 들어가 실패한다. 프로세스별 프로필로 분리한다.
+            // 같은 PC에서 에디터+빌드·빌드 2개, 웹은 탭끼리 PlayerPrefs 를 공유해
+            // 동일 플레이어로 로비에 두 번 들어가 실패한다. 프로세스·탭별 프로필로 분리한다.
             EnsureProcessAuthProfile(auth);
 
             if (!auth.IsSignedIn)
@@ -63,13 +64,29 @@ namespace Backend.Object.Management
             }
         }
 
+        private static string AuthProfileName()
+        {
+            if (WebBuild.IsPlayer)
+            {
+                if (string.IsNullOrEmpty(_webAuthProfile))
+                {
+                    _webAuthProfile = "w" + Guid.NewGuid().ToString("N");
+                    if (_webAuthProfile.Length > 30)
+                    {
+                        _webAuthProfile = _webAuthProfile.Substring(0, 30);
+                    }
+                }
+
+                return _webAuthProfile;
+            }
+
+            var profile = "p" + System.Diagnostics.Process.GetCurrentProcess().Id;
+            return profile.Length > 30 ? profile.Substring(0, 30) : profile;
+        }
+
         private static void EnsureProcessAuthProfile(IAuthenticationService auth)
         {
-            var profile = "p" + System.Diagnostics.Process.GetCurrentProcess().Id;
-            if (profile.Length > 30)
-            {
-                profile = profile.Substring(0, 30);
-            }
+            var profile = AuthProfileName();
 
             if (string.Equals(auth.Profile, profile, StringComparison.Ordinal))
             {
@@ -324,7 +341,7 @@ namespace Backend.Object.Management
                 // NGO 경로에서는 호스트·클라 모두 RelayServerData 에 할당이 들어간다.
                 // RelayClientData 는 Entities 전용이라 비어 있을 수 있다.
                 var data = configuration.RelayServerData;
-                _transport.UseWebSockets = data.IsWebSocket != 0;
+                _transport.UseWebSockets = WebBuild.IsPlayer || data.IsWebSocket != 0;
                 _transport.SetRelayServerData(data);
                 return Task.CompletedTask;
             }

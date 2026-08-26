@@ -59,6 +59,13 @@ namespace Backend.Object.Management
             }
 
             AsyncOperationHandle<T> handle = Addressables.LoadAssetAsync<T>(key);
+            if (WebBuild.IsPlayer)
+            {
+                Debug.LogError($"[ResourceManager] WebGL cannot sync-load '{key}'. Use LoadResourceAsync.");
+                Addressables.Release(handle);
+                return null;
+            }
+
             T resource = handle.WaitForCompletion();
 
             if (handle.Status == AsyncOperationStatus.Succeeded)

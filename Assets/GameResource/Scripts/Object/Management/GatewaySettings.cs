@@ -13,11 +13,16 @@ namespace Backend.Object.Management
         /// <summary>LAN 게스트가 붙을 호스트 IP. 릴레이 모드에서는 쓰지 않는다.</summary>
         public static string LanHost => PlayerPrefs.GetString(PREF_LAN_HOST, string.Empty);
 
-        /// <summary>로비에서 고른 접속 경로.</summary>
+        /// <summary>로비에서 고른 접속 경로. WebGL 은 릴레이만.</summary>
         public static ConnectionMode Mode
         {
             get
             {
+                if (WebBuild.IsPlayer)
+                {
+                    return ConnectionMode.Relay;
+                }
+
                 var value = PlayerPrefs.GetInt(PREF_CONNECTION_MODE, (int)ConnectionMode.Relay);
                 if (value == (int)ConnectionMode.Relay || value == (int)ConnectionMode.Lan)
                 {
@@ -43,9 +48,14 @@ namespace Backend.Object.Management
             PlayerPrefs.Save();
         }
 
-        /// <summary>접속 경로를 저장한다.</summary>
+        /// <summary>접속 경로를 저장한다. WebGL 은 릴레이로 고정한다.</summary>
         public static void SaveMode(ConnectionMode mode)
         {
+            if (WebBuild.IsPlayer)
+            {
+                mode = ConnectionMode.Relay;
+            }
+
             PlayerPrefs.SetInt(PREF_CONNECTION_MODE, (int)mode);
             PlayerPrefs.Save();
         }

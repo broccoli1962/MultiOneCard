@@ -11,6 +11,11 @@ namespace Backend.Object.Management
             base.OnAwake();
 
             Application.targetFrameRate = 60;
+            if (WebBuild.IsPlayer)
+            {
+                Application.runInBackground = true;
+            }
+
             DisplaySettings.ApplySaved();
         }
 

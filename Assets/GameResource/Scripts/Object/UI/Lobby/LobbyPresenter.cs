@@ -24,6 +24,12 @@ namespace Backend.Object.UI
             View.EnsureLayout();
             View.SetNick(PlayerPrefs.GetString(PrefNick, string.Empty));
             View.SetLanHost(GatewaySettings.LanHost);
+            View.SetConnectionModeVisible(!WebBuild.IsPlayer);
+            if (WebBuild.IsPlayer)
+            {
+                GatewaySettings.SaveMode(ConnectionMode.Relay);
+            }
+
             View.SetMode(GatewaySettings.Mode);
             View.SetStatus(ModeStatus(GatewaySettings.Mode));
             BindView();
@@ -87,6 +93,11 @@ namespace Backend.Object.UI
 
         private void OnModeClicked(ConnectionMode mode)
         {
+            if (WebBuild.IsPlayer)
+            {
+                mode = ConnectionMode.Relay;
+            }
+
             GatewaySettings.SaveMode(mode);
             View.SetMode(mode);
             View.SetStatus(ModeStatus(mode));
@@ -176,6 +187,15 @@ namespace Backend.Object.UI
 
         private static string ModeStatus(ConnectionMode mode)
         {
+            if (WebBuild.IsPlayer)
+            {
+                return UgsLobbyRelay.IsProjectLinked
+                    ? "릴레이. 호스트 화면의 방 코드로 입장. 방을 연 탭을 유지하세요. 한 방 최대 "
+                        + SessionLimits.MaxPlayers
+                        + "인"
+                    : "릴레이는 Edit > Project Settings > Services 에서 Cloud 연결 필요";
+            }
+
             if (mode == ConnectionMode.Lan)
             {
                 return "랜. 게스트는 서버 주소에 호스트 IP";

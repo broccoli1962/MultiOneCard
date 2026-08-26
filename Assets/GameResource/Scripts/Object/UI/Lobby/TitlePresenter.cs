@@ -14,6 +14,7 @@ namespace Backend.Object.UI
         public override void OnOpen()
         {
             View.EnsureLayout();
+            View.SetWebHostWarning(WebBuild.IsPlayer);
             View.StartClicked += OnStartClicked;
             View.SettingsClicked += OnSettingsClicked;
         }

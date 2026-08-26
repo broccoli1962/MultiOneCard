@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Backend.App;
 using Backend.Object.Management;
+using Cysharp.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -46,6 +47,7 @@ namespace Backend.Object.UI
         private bool _traveling;
         private bool _legal = true;
         private Canvas _canvas;
+        private int _bindSerial;
 
         /// <summary>앞면이면 인스턴스 id. 뒷면·버림은 -1.</summary>
         public int InstanceId { get; private set; } = -1;
@@ -175,9 +177,13 @@ namespace Backend.Object.UI
         {
             InstanceId = instanceId;
             DefId = defId;
-            var sprite = LoadCardSprite(CardArtKeys.FrontAddress(defId));
             var fallback = string.IsNullOrEmpty(defId) ? "?" : defId;
-            ApplySprite(sprite, FrontColor(defId), fallback, FrontLabelColor(defId), sprite == null);
+            BindCardArt(
+                CardArtKeys.FrontAddress(defId),
+                FrontColor(defId),
+                fallback,
+                FrontLabelColor(defId),
+                alwaysShowLabel: false);
             SetDragEnabled(false);
             SetInteractable(true);
             SetLegal(true);
@@ -199,9 +205,13 @@ namespace Backend.Object.UI
         {
             InstanceId = -1;
             DefId = null;
-            var sprite = LoadCardSprite(CardArtKeys.BackAddress());
             var label = string.IsNullOrEmpty(caption) ? count.ToString() : caption;
-            ApplySprite(sprite, justActed ? new Color(0.42f, 0.36f, 0.18f, 1f) : BackTint, label, Color.white, true);
+            BindCardArt(
+                CardArtKeys.BackAddress(),
+                justActed ? new Color(0.42f, 0.36f, 0.18f, 1f) : BackTint,
+                label,
+                Color.white,
+                alwaysShowLabel: true);
             SetDragEnabled(false);
             SetLegal(true);
             SetInteractable(false);
@@ -515,6 +525,48 @@ namespace Backend.Object.UI
             Clicked?.Invoke(this);
         }
 
+        private void BindCardArt(
+            string address,
+            Color fallbackTint,
+            string label,
+            Color labelColor,
+            bool alwaysShowLabel)
+        {
+            var serial = ++_bindSerial;
+            if (TryGetCachedSprite(address, out var cached))
+            {
+                ApplySprite(cached, fallbackTint, label, labelColor, alwaysShowLabel || cached == null);
+                return;
+            }
+
+            if (WebBuild.IsPlayer)
+            {
+                ApplySprite(null, fallbackTint, label, labelColor, true);
+                ApplySpriteAsync(serial, address, fallbackTint, label, labelColor, alwaysShowLabel).Forget();
+                return;
+            }
+
+            var sprite = LoadCardSprite(address);
+            ApplySprite(sprite, fallbackTint, label, labelColor, alwaysShowLabel || sprite == null);
+        }
+
+        private async UniTaskVoid ApplySpriteAsync(
+            int serial,
+            string address,
+            Color fallbackTint,
+            string label,
+            Color labelColor,
+            bool alwaysShowLabel)
+        {
+            var sprite = await LoadCardSpriteAsync(address);
+            if (this == null || serial != _bindSerial || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            ApplySprite(sprite, fallbackTint, label, labelColor, alwaysShowLabel || sprite == null);
+        }
+
         private void ApplySprite(Sprite sprite, Color fallbackTint, string label, Color labelColor, bool showLabel)
         {
             if (_fill != null)
@@ -532,6 +584,17 @@ namespace Backend.Object.UI
             }
         }
 
+        private static bool TryGetCachedSprite(string address, out Sprite sprite)
+        {
+            sprite = null;
+            if (string.IsNullOrEmpty(address))
+            {
+                return true;
+            }
+
+            return SpriteCache.TryGetValue(address, out sprite) && sprite != null;
+        }
+
         private static Sprite LoadCardSprite(string address)
         {
             if (string.IsNullOrEmpty(address) || GameStateUtil.IsQuitting)
@@ -539,12 +602,33 @@ namespace Backend.Object.UI
                 return null;
             }
 
-            if (SpriteCache.TryGetValue(address, out var cached) && cached != null)
+            if (TryGetCachedSprite(address, out var cached))
             {
                 return cached;
             }
 
             var sprite = ResourceManager.LoadResource<Sprite>(address);
+            if (sprite != null)
+            {
+                SpriteCache[address] = sprite;
+            }
+
+            return sprite;
+        }
+
+        private static async UniTask<Sprite> LoadCardSpriteAsync(string address)
+        {
+            if (string.IsNullOrEmpty(address) || GameStateUtil.IsQuitting)
+            {
+                return null;
+            }
+
+            if (TryGetCachedSprite(address, out var cached))
+            {
+                return cached;
+            }
+
+            var sprite = await ResourceManager.LoadResourceAsync<Sprite>(address);
             if (sprite != null)
             {
                 SpriteCache[address] = sprite;

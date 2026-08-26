@@ -149,6 +149,28 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
+        /// 릴레이/LAN 선택 UI. WebGL 은 릴레이만 쓰므로 숨긴다.
+        /// </summary>
+        public void SetConnectionModeVisible(bool visible)
+        {
+            EnsureLayout();
+            if (_modeRelayButton != null)
+            {
+                _modeRelayButton.gameObject.SetActive(visible);
+            }
+
+            if (_modeLanButton != null)
+            {
+                _modeLanButton.gameObject.SetActive(visible);
+            }
+
+            if (!visible)
+            {
+                SetLanHostVisible(false);
+            }
+        }
+
+        /// <summary>
         /// 상태 문구를 표시한다.
         /// </summary>
         public void SetStatus(string status)

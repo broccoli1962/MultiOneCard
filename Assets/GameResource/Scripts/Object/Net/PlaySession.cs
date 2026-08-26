@@ -45,6 +45,11 @@ namespace Backend.Object.Net
             await EnsureNetworkAsync(nick);
             try
             {
+                if (WebBuild.IsPlayer)
+                {
+                    mode = ConnectionMode.Relay;
+                }
+
                 var effectiveCode = roomCode;
                 if (mode == ConnectionMode.Relay)
                 {
@@ -80,6 +85,11 @@ namespace Backend.Object.Net
             await EnsureNetworkAsync(nick);
             try
             {
+                if (WebBuild.IsPlayer)
+                {
+                    mode = ConnectionMode.Relay;
+                }
+
                 if (mode == ConnectionMode.Relay)
                 {
                     await UgsLobbyRelay.JoinAsync(roomCode, _root.GetComponent<UnityTransport>());
@@ -148,9 +158,14 @@ namespace Backend.Object.Net
             }
         }
 
-        /// <summary>이 기기의 LAN IPv4. DNS 조회 없이 어댑터만 본다.</summary>
+        /// <summary>이 기기의 LAN IPv4. DNS 조회 없이 어댑터만 본다. WebGL 은 빈 문자열.</summary>
         public static string LocalIpv4()
         {
+            if (WebBuild.IsPlayer)
+            {
+                return string.Empty;
+            }
+
             try
             {
                 foreach (var adapter in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
@@ -190,6 +205,11 @@ namespace Backend.Object.Net
             _root = new GameObject("PlaySession");
             UnityEngine.Object.DontDestroyOnLoad(_root);
             var transport = _root.AddComponent<UnityTransport>();
+            if (WebBuild.IsPlayer)
+            {
+                transport.UseWebSockets = true;
+            }
+
             _nm = _root.AddComponent<NetworkManager>();
             _nm.SetSingleton();
             _nm.RunInBackground = true;

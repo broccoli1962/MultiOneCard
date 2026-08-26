@@ -17,6 +17,10 @@ namespace Backend.Object.UI
         private const int ChatMaxChars = 80;
         private const int LanEventTimeoutMs = 5000;
         private const int RelayEventTimeoutMs = 20000;
+        private const int WebRelayEventTimeoutMs = 45000;
+
+        private static int RelayTimeoutMs =>
+            WebBuild.IsPlayer ? WebRelayEventTimeoutMs : RelayEventTimeoutMs;
 
         private static string _pendingNick = "P0";
         private static string _pendingRoomCode = "000000";
@@ -87,7 +91,7 @@ namespace Backend.Object.UI
             }
 
             var waited = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _connectStartedMs;
-            var limit = GatewaySettings.Mode == ConnectionMode.Relay ? RelayEventTimeoutMs : LanEventTimeoutMs;
+            var limit = GatewaySettings.Mode == ConnectionMode.Relay ? RelayTimeoutMs : LanEventTimeoutMs;
             if (waited > limit && _status != null && _status.IndexOf("연결할 수 없음", StringComparison.Ordinal) < 0)
             {
                 _status = "서버에 연결할 수 없음  " + ConnectHint();
@@ -249,7 +253,7 @@ namespace Backend.Object.UI
 
         private static async UniTask WaitForGuestTransportAsync(PlayClientTransport transport)
         {
-            var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + RelayEventTimeoutMs;
+            var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + RelayTimeoutMs;
             while (transport != null && !transport.IsConnected)
             {
                 if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= deadline)
