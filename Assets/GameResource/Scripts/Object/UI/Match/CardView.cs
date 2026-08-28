@@ -149,6 +149,29 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
+        /// 상대 손패 캡션을 카드 바깥 하단에 두 줄 중앙정렬로 둔다.
+        /// </summary>
+        public void LayoutCaptionBelow()
+        {
+            if (_label == null)
+            {
+                return;
+            }
+
+            var rt = _label.rectTransform;
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, -6f);
+            rt.sizeDelta = new Vector2(240f, 52f);
+            _label.alignment = TextAlignmentOptions.Center;
+            _label.textWrappingMode = TextWrappingModes.NoWrap;
+            _label.overflowMode = TextOverflowModes.Overflow;
+            _label.fontSize = 18;
+            _label.raycastTarget = false;
+        }
+
+        /// <summary>
         /// HandLayout 이 정한 선택 전 위치·회전.
         /// </summary>
         public void SetRest(Vector2 restAnchored, float restZ = 0f)
@@ -199,7 +222,7 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 상대 뒷면. caption 은 좌석·장수, justActed 면 강조한다.
+        /// 상대 뒷면. caption 은 닉·장수, justActed 면 강조한다.
         /// </summary>
         public void BindBack(int count, string caption, bool justActed)
         {

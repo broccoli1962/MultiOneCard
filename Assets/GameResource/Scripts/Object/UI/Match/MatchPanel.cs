@@ -387,7 +387,7 @@ namespace Backend.Object.UI
                 }
 
                 BindHandCount(match, viewingSeat);
-                BindOpponents(match, viewingSeat, lastActSeat);
+                BindOpponents(match, viewingSeat, lastActSeat, nicks);
             }
 
             RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
@@ -1299,12 +1299,16 @@ namespace Backend.Object.UI
             {
                 var name = i == 0 ? "OpponentCard" : "Opponent" + i;
                 _opponentViews[i] ??= FindOrCreateCard(name);
+                if (_opponentViews[i] != null)
+                {
+                    _opponentViews[i].LayoutCaptionBelow();
+                }
             }
 
             _opponentView = _opponentViews[0];
         }
 
-        private void BindOpponents(PublicMatchView match, int viewingSeat, int lastActSeat)
+        private void BindOpponents(PublicMatchView match, int viewingSeat, int lastActSeat, string[] nicks)
         {
             var placed = LayoutPresetUtil.PlaceOpponents(_seatCount, viewingSeat, _seatScratch);
             for (var i = 0; i < _opponentViews.Length; i++)
@@ -1327,9 +1331,7 @@ namespace Backend.Object.UI
                     ? match.handCounts[seat]
                     : 0;
                 var acted = lastActSeat == seat;
-                var caption = acted
-                    ? "P" + seat + " 냄\n" + count + "장"
-                    : "P" + seat + "\n" + count + "장";
+                var caption = NickOf(nicks, seat) + "\n남은 덱 수 : " + count + "장";
                 view.BindBack(count, caption, acted);
             }
         }
