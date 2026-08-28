@@ -99,6 +99,8 @@ namespace Backend.Net
         public bool[] ready;
         public int hostSeat;
         public int seatCount;
+        public bool[] rematchYes;
+        public bool[] rematchVoted;
     }
 
     /// <summary>MatchEnded 페이로드. 순위·장수·점수.</summary>

@@ -15,6 +15,7 @@ namespace Backend.Object.UI
         [SerializeField] private TextMeshProUGUI _webWarningText;
         [SerializeField] private CommonButton _startButton;
         [SerializeField] private CommonButton _settingsButton;
+        [SerializeField] private CommonButton _quitButton;
 
         private bool _layoutReady;
 
@@ -23,6 +24,9 @@ namespace Backend.Object.UI
 
         /// <summary>설정 팝업.</summary>
         public event Action SettingsClicked;
+
+        /// <summary>앱 종료.</summary>
+        public event Action QuitClicked;
 
         protected override void Awake()
         {
@@ -48,9 +52,23 @@ namespace Backend.Object.UI
             _webWarningText ??= FindOrCreateText("WebWarning");
             _startButton ??= FindOrCreateButton("Start");
             _settingsButton ??= FindOrCreateButton("Settings");
+            _quitButton ??= FindOrCreateButton("Quit");
             BindButton(_startButton, () => StartClicked?.Invoke());
             BindButton(_settingsButton, () => SettingsClicked?.Invoke());
+            BindButton(_quitButton, () => QuitClicked?.Invoke());
             _layoutReady = true;
+        }
+
+        /// <summary>
+        /// 종료 버튼을 켜고 끈다. WebGL 에서는 숨긴다.
+        /// </summary>
+        public void SetQuitVisible(bool visible)
+        {
+            EnsureLayout();
+            if (_quitButton != null)
+            {
+                _quitButton.CachedGameObject.SetActive(visible);
+            }
         }
 
         /// <summary>

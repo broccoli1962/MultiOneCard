@@ -532,12 +532,18 @@ namespace Backend.App
                 return;
             }
 
+            if (!IsSeatIndex(command.seat) || !_connected[command.seat])
+            {
+                EmitReject(command, NetReject.NotYourTurn);
+                return;
+            }
+
             _rematchVoted[command.seat] = true;
             _rematchYes[command.seat] = command.rematchYes;
             var ev = Ev(EvCode.RoomUpdated, command.seat);
             ev.ackSeq = command.seq;
             ev.room = BuildRoomView();
-            if (AllRematchVoted() || nowMs >= _rematchDeadlineMs)
+            if (!command.rematchYes || AllRematchVoted() || nowMs >= _rematchDeadlineMs)
             {
                 ResolveRematch();
             }
@@ -545,15 +551,22 @@ namespace Backend.App
 
         private bool AllRematchVoted()
         {
+            var any = false;
             for (var i = 0; i < SeatCount; i++)
             {
+                if (!_connected[i])
+                {
+                    continue;
+                }
+
+                any = true;
                 if (!_rematchVoted[i])
                 {
                     return false;
                 }
             }
 
-            return true;
+            return any;
         }
 
         private void ResolveRematch()
@@ -1089,6 +1102,10 @@ namespace Backend.App
                 nicks[i] = _connected[i] ? _nicks[i] : string.Empty;
             }
 
+            var rematchYes = new bool[SeatCount];
+            var rematchVoted = new bool[SeatCount];
+            Array.Copy(_rematchYes, rematchYes, SeatCount);
+            Array.Copy(_rematchVoted, rematchVoted, SeatCount);
             return new RoomView
             {
                 roomCode = _roomCode,
@@ -1097,6 +1114,8 @@ namespace Backend.App
                 ready = ready,
                 hostSeat = HostSeat,
                 seatCount = SeatCount,
+                rematchYes = rematchYes,
+                rematchVoted = rematchVoted,
             };
         }
 

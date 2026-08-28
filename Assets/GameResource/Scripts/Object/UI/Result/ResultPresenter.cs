@@ -1,30 +1,29 @@
 using System;
 using Backend.App;
 using Backend.Net;
-using Backend.Object.Management;
 
 namespace Backend.Object.UI
 {
     /// <summary>
     /// 결과·재대결. 투표는 <see cref="NetClient.RematchVote"/> 로만 보내고 순위는 판결하지 않는다.
     /// 재대결 찬성 시 화면을 유지하고 전원 동의까지 기다린다. 20초 미투표는 반대로 보낸다.
+    /// 반대·마감은 호스트가 Waiting 으로 돌릴 때까지 패널을 유지한다.
     /// </summary>
     public sealed class ResultPresenter : UIPresenter<ResultPanel>
     {
         private static MatchEndView _pendingResult;
         private static string[] _pendingNicks;
         private static long _pendingDeadlineMs;
+        private static RoomView _pendingRoom;
         private static Action<bool> _pendingVote;
-        private static Action<bool> _pendingClosed;
 
         private MatchEndView _result;
         private string[] _nicks;
         private long _deadlineMs;
+        private RoomView _room;
         private Action<bool> _vote;
-        private Action<bool> _closed;
         private bool _voted;
         private bool _voteYes;
-        private bool _finished;
 
         /// <summary>
         /// 결과 패널을 열기 전 순위와 투표 콜백을 넣는다.
@@ -34,14 +33,20 @@ namespace Backend.Object.UI
             MatchEndView result,
             string[] nicks,
             long deadlineMs,
-            Action<bool> vote,
-            Action<bool> closed)
+            Action<bool> vote)
         {
             _pendingResult = result;
             _pendingNicks = nicks;
             _pendingDeadlineMs = deadlineMs;
             _pendingVote = vote;
-            _pendingClosed = closed;
+        }
+
+        /// <summary>
+        /// 결과 패널이 열리기 전·후에 재대결 투표 현황을 넣는다.
+        /// </summary>
+        public static void PushRoom(RoomView room)
+        {
+            _pendingRoom = room;
         }
 
         /// <summary>
@@ -55,12 +60,21 @@ namespace Backend.Object.UI
                 ? _pendingDeadlineMs
                 : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + MatchRuntime.RematchSeconds * 1000L;
             _vote = _pendingVote;
-            _closed = _pendingClosed;
+            _room = _pendingRoom;
             _voted = false;
             _voteYes = false;
-            _finished = false;
             View.EnsureLayout();
             BindView();
+            Refresh();
+        }
+
+        /// <summary>
+        /// 재대결 투표 현황을 반영한다. 화면은 판결하지 않는다.
+        /// </summary>
+        public void ApplyRoom(RoomView room)
+        {
+            PushRoom(room);
+            _room = room;
             Refresh();
         }
 
@@ -77,7 +91,7 @@ namespace Backend.Object.UI
         /// </summary>
         public void Tick()
         {
-            if (_finished || GameStateUtil.IsQuitting)
+            if (GameStateUtil.IsQuitting)
             {
                 return;
             }
@@ -85,8 +99,6 @@ namespace Backend.Object.UI
             if (RemainSeconds() <= 0 && !_voted)
             {
                 Vote(false);
-                Finish();
-                return;
             }
 
             Refresh();
@@ -117,7 +129,6 @@ namespace Backend.Object.UI
         private void OnNoClicked()
         {
             Vote(false);
-            Finish();
         }
 
         private void Vote(bool rematchYes)
@@ -133,26 +144,6 @@ namespace Backend.Object.UI
             Refresh();
         }
 
-        private void Finish()
-        {
-            if (_finished || GameStateUtil.IsQuitting)
-            {
-                return;
-            }
-
-            _finished = true;
-            if (!_voted)
-            {
-                Vote(false);
-            }
-
-            _closed?.Invoke(_voteYes);
-            if (View != null)
-            {
-                UIManager.Close(View);
-            }
-        }
-
         private void Refresh()
         {
             if (View == null)
@@ -160,7 +151,62 @@ namespace Backend.Object.UI
                 return;
             }
 
-            View.Render(FormatRanks(_result, _nicks), RemainSeconds(), _voted, _voteYes);
+            View.Render(FormatRanks(_result, _nicks), RemainSeconds(), _voted, FormatStatus());
+        }
+
+        private string FormatStatus()
+        {
+            var progress = FormatVoteProgress();
+            if (!_voted)
+            {
+                return string.IsNullOrEmpty(progress) ? "미투표는 반대" : progress + "\n미투표는 반대";
+            }
+
+            if (_voteYes)
+            {
+                return string.IsNullOrEmpty(progress) ? "다시하기 요청중" : progress;
+            }
+
+            return string.IsNullOrEmpty(progress) ? "재대결 반대" : progress + "\n재대결 반대";
+        }
+
+        private string FormatVoteProgress()
+        {
+            var nicks = _room != null && _room.nicks != null ? _room.nicks : _nicks;
+            var seatCount = _room != null && _room.seatCount > 0
+                ? _room.seatCount
+                : (nicks != null ? nicks.Length : 0);
+            if (seatCount <= 0)
+            {
+                return null;
+            }
+
+            var yesFlags = _room != null ? _room.rematchYes : null;
+            var votedFlags = _room != null ? _room.rematchVoted : null;
+            var total = 0;
+            var yesCount = 0;
+            for (var i = 0; i < seatCount; i++)
+            {
+                var nick = nicks != null && i < nicks.Length ? nicks[i] : null;
+                if (string.IsNullOrEmpty(nick))
+                {
+                    continue;
+                }
+
+                total++;
+                if (votedFlags != null && i < votedFlags.Length && votedFlags[i]
+                    && yesFlags != null && i < yesFlags.Length && yesFlags[i])
+                {
+                    yesCount++;
+                }
+            }
+
+            if (total <= 0)
+            {
+                return null;
+            }
+
+            return "다시하기 " + yesCount + "/" + total;
         }
 
         private int RemainSeconds()

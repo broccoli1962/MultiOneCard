@@ -1,4 +1,5 @@
 using System;
+using Backend.Net;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -23,7 +24,7 @@ namespace Backend.Object.UI
         /// <summary>재대결 찬성.</summary>
         public event Action YesClicked;
 
-        /// <summary>재대결 반대. 미투표 만료도 Presenter 가 이 쪽으로 처리한다.</summary>
+        /// <summary>재대결 반대. 미투표 만료는 Presenter Tick 이 반대로 보낸다.</summary>
         public event Action NoClicked;
 
         protected override bool DefaultHandleBackButton => true;
@@ -67,9 +68,17 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 순위표와 재대결 남은 초를 그린다.
+        /// 호스트가 보낸 재대결 투표 현황을 Presenter 에 넘긴다.
         /// </summary>
-        public void Render(string ranks, int remainSeconds, bool voted, bool voteYes)
+        public void ApplyRoom(RoomView room)
+        {
+            Presenter?.ApplyRoom(room);
+        }
+
+        /// <summary>
+        /// 순위표와 재대결 남은 초·투표 현황을 그린다.
+        /// </summary>
+        public void Render(string ranks, int remainSeconds, bool voted, string status)
         {
             EnsureLayout();
             if (_rankText != null)
@@ -86,18 +95,7 @@ namespace Backend.Object.UI
 
             if (_statusText != null)
             {
-            if (!voted)
-            {
-                _statusText.text = "미투표는 반대";
-            }
-            else if (voteYes)
-            {
-                _statusText.text = "다시하기 요청중";
-            }
-            else
-            {
-                _statusText.text = "재대결 반대";
-            }
+                _statusText.text = status ?? string.Empty;
             }
 
             if (_yesButton != null)

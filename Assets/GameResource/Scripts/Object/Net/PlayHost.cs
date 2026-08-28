@@ -124,6 +124,7 @@ namespace Backend.Object.Net
         /// <summary>네트워크와 로비를 닫는다.</summary>
         public void Shutdown()
         {
+            NotifyGuestsRoomClosed();
             if (_nm != null)
             {
                 _nm.OnClientConnectedCallback -= OnClientConnected;
@@ -159,6 +160,18 @@ namespace Backend.Object.Net
             _seatByClient.Clear();
             _clientBySeat.Clear();
             _pendingNicks.Clear();
+        }
+
+        /// <summary>호스트가 방을 닫기 전에 게스트에게 RoomClosed 를 보낸다.</summary>
+        private void NotifyGuestsRoomClosed()
+        {
+            if (_nm == null || !_nm.IsServer || _nm.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            var ev = EventMessage.Create(EvCode.RoomClosed, 0, _runtime != null ? _runtime.HostSeat : 0);
+            BroadcastToRemotes(new[] { ev });
         }
 
         private void RegisterHandlers()

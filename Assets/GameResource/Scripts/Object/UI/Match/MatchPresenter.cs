@@ -43,6 +43,8 @@ namespace Backend.Object.UI
         private bool _resultOpened;
         private ResultPanel _resultPanel;
         private bool _rematchWaiting;
+        private bool _handedToRoom;
+        private bool _hostClosed;
         private int _mirrorTarget;
         private bool _chatVisible;
         private int _lastChatSeq = int.MinValue;
@@ -110,8 +112,12 @@ namespace Backend.Object.UI
             UnbindPointer();
             UnbindView();
             ReleaseHand();
-            StopHotseat();
-            PlaySession.Stop();
+            var keepSession = _handedToRoom;
+            StopHotseat(disconnect: !keepSession);
+            if (!keepSession)
+            {
+                PlaySession.Stop();
+            }
         }
 
         /// <summary>
@@ -126,6 +132,15 @@ namespace Backend.Object.UI
 
             _loopback?.Pump();
             PlaySession.Pump();
+            if (_hostClosed || _handedToRoom)
+            {
+                return;
+            }
+
+            if (_remote && !IsActiveTransportConnected())
+            {
+                HandleHostClosed();
+            }
         }
 
         private void BindView()
@@ -341,6 +356,8 @@ namespace Backend.Object.UI
             _resultOpened = false;
             _resultPanel = null;
             _rematchWaiting = false;
+            _handedToRoom = false;
+            _hostClosed = false;
             _selectedPlayId = -1;
             _pointer.SetSheet(GamePointerSheet.None);
             _pointer.ClearAllSelections();
@@ -351,7 +368,7 @@ namespace Backend.Object.UI
             _queenReceiveTravelArmed = false;
         }
 
-        private void StopHotseat()
+        private void StopHotseat(bool disconnect = true)
         {
             if (_clients != null)
             {
@@ -364,7 +381,7 @@ namespace Backend.Object.UI
                     }
 
                     client.EventReceived -= OnNetEvent;
-                    if (client.IsConnected)
+                    if (disconnect && client.IsConnected)
                     {
                         client.Disconnect();
                     }
@@ -405,6 +422,12 @@ namespace Backend.Object.UI
                 AppendSystemChat(ev.seq, NickOf(ev.seat) + " 재접속", true);
             }
 
+            if (ev.ev == EvCode.RoomClosed)
+            {
+                HandleHostClosed();
+                return;
+            }
+
             if (ev.ev == EvCode.CardPlayed)
             {
                 _lastPlayedDefId = ev.defId;
@@ -427,15 +450,16 @@ namespace Backend.Object.UI
                 ResetTableUi("시작");
             }
 
-            if (ev.ev == EvCode.RoomUpdated
-                && _resultOpened
-                && _rematchWaiting
-                && ev.room != null
-                && ev.room.phase == MatchPhase.Waiting)
+            if (ev.ev == EvCode.RoomUpdated && ev.room != null && _resultOpened)
             {
-                CloseResultPanel();
-                LeaveToLobby();
-                return;
+                ResultPresenter.PushRoom(ev.room);
+                _resultPanel?.ApplyRoom(ev.room);
+                if (ev.room.phase == MatchPhase.Waiting)
+                {
+                    CloseResultPanel();
+                    LeaveToRoom();
+                    return;
+                }
             }
 
             if (ev.ev == EvCode.MatchEnded)
@@ -1390,12 +1414,12 @@ namespace Backend.Object.UI
 
             _resultOpened = true;
             _rematchWaiting = false;
+            ResultPresenter.PushRoom(ActiveClient() != null ? ActiveClient().Room : AnyRoom());
             ResultPresenter.Prepare(
                 ev.result,
                 BuildNicks(),
                 ev.deadlineMs,
-                OnRematchVote,
-                OnResultClosed);
+                OnRematchVote);
             OpenResultAsync().Forget();
         }
 
@@ -1413,6 +1437,11 @@ namespace Backend.Object.UI
             }
 
             _resultPanel = panel;
+            var room = ActiveClient() != null ? ActiveClient().Room : AnyRoom();
+            if (room != null)
+            {
+                panel.ApplyRoom(room);
+            }
         }
 
         private void OnRematchVote(bool rematchYes)
@@ -1436,22 +1465,6 @@ namespace Backend.Object.UI
             }
         }
 
-        private void OnResultClosed(bool rematchYes)
-        {
-            _resultOpened = false;
-            _resultPanel = null;
-            if (GameStateUtil.IsQuitting)
-            {
-                return;
-            }
-
-            if (!rematchYes)
-            {
-                _rematchWaiting = false;
-                LeaveToLobby();
-            }
-        }
-
         private void CloseResultPanel()
         {
             if (_resultPanel != null)
@@ -1462,6 +1475,60 @@ namespace Backend.Object.UI
 
             _resultOpened = false;
             _rematchWaiting = false;
+        }
+
+        private void LeaveToRoom()
+        {
+            if (_handedToRoom || _hostClosed || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            if (!_remote)
+            {
+                LeaveToLobby();
+                return;
+            }
+
+            var client = ActiveClient();
+            if (client == null)
+            {
+                LeaveToLobby();
+                return;
+            }
+
+            _handedToRoom = true;
+            CloseResultPanel();
+            RoomPresenter.PrepareResume(client, _localSeat);
+            if (View != null)
+            {
+                UIManager.Close(View);
+            }
+
+            UIManager.OpenAsync<RoomPanel>().Forget();
+        }
+
+        private void HandleHostClosed()
+        {
+            if (_handedToRoom || _hostClosed || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            _hostClosed = true;
+            CloseResultPanel();
+            if (View != null)
+            {
+                UIManager.Close(View);
+            }
+
+            LobbyPresenter.OpenAfterHostClosed();
+        }
+
+        private bool IsActiveTransportConnected()
+        {
+            var client = ActiveClient();
+            return client == null || client.IsConnected;
         }
 
         private void LeaveToLobby()

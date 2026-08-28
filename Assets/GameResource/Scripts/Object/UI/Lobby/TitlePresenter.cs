@@ -1,5 +1,6 @@
 using Backend.Object.Management;
 using Cysharp.Threading.Tasks;
+using UnityEngine;
 
 namespace Backend.Object.UI
 {
@@ -15,8 +16,10 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             View.SetWebHostWarning(WebBuild.IsPlayer);
+            View.SetQuitVisible(!WebBuild.IsPlayer);
             View.StartClicked += OnStartClicked;
             View.SettingsClicked += OnSettingsClicked;
+            View.QuitClicked += OnQuitClicked;
         }
 
         /// <summary>
@@ -31,6 +34,7 @@ namespace Backend.Object.UI
 
             View.StartClicked -= OnStartClicked;
             View.SettingsClicked -= OnSettingsClicked;
+            View.QuitClicked -= OnQuitClicked;
         }
 
         private void OnStartClicked()
@@ -41,6 +45,20 @@ namespace Backend.Object.UI
         private void OnSettingsClicked()
         {
             UIManager.OpenAsync<SettingsPopup>().Forget();
+        }
+
+        private void OnQuitClicked()
+        {
+            if (WebBuild.IsPlayer)
+            {
+                return;
+            }
+
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
     }
 }
