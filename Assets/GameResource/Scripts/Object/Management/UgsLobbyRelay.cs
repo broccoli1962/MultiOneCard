@@ -17,7 +17,9 @@ namespace Backend.Object.Management
     public static class UgsLobbyRelay
     {
         public const string DataSeats = "seats";
+        public const string DataKind = "kind";
         private const string SessionType = "onetable";
+        private const int QueryCount = 25;
 
         private static ISession _hosted;
         private static ISession _joined;
@@ -118,16 +120,34 @@ namespace Backend.Object.Management
         /// </summary>
         private static RelayProtocol PreferredRelayProtocol => RelayProtocol.WSS;
 
-        private static SessionOptions BuildHostOptions(int seats, ApplyRelayHandler handler)
+        private static SessionOptions BuildHostOptions(
+            int seats,
+            bool isPrivate,
+            string hostNick,
+            ApplyRelayHandler handler)
         {
+            var name = hostNick != null ? hostNick.Trim() : string.Empty;
+            if (name.Length == 0)
+            {
+                name = "room";
+            }
+
             return new SessionOptions
                 {
                     MaxPlayers = seats,
-                    IsPrivate = false,
+                    IsPrivate = isPrivate,
+                    Name = name,
                     Type = SessionType,
                     SessionProperties = new Dictionary<string, SessionProperty>
                     {
-                        { DataSeats, new SessionProperty(seats.ToString()) },
+                        {
+                            DataKind,
+                            new SessionProperty(SessionType, VisibilityPropertyOptions.Public, PropertyIndex.String1)
+                        },
+                        {
+                            DataSeats,
+                            new SessionProperty(seats.ToString(), VisibilityPropertyOptions.Public, PropertyIndex.Number1)
+                        },
                     },
                 }
                 .WithRelayNetwork()
@@ -146,7 +166,11 @@ namespace Backend.Object.Management
         /// 세션과 Relay 할당을 만든다. 동시 호스트는 <see cref="SessionLimits.MaxHostedSessions"/> 를 넘지 못한다.
         /// 반환의 <see cref="HostedRelay.Code"/> 가 게스트가 입력할 Unity 조인 코드다.
         /// </summary>
-        public static async Task<HostedRelay> CreateAsync(int seatCount, UnityTransport transport)
+        public static async Task<HostedRelay> CreateAsync(
+            int seatCount,
+            UnityTransport transport,
+            bool isPrivate = false,
+            string hostNick = null)
         {
             await EnsureSignedInAsync();
             if (_hostedCount >= SessionLimits.MaxHostedSessions)
@@ -156,7 +180,8 @@ namespace Backend.Object.Management
 
             var seats = SessionLimits.ClampPlayers(seatCount);
             var handler = new ApplyRelayHandler(transport);
-            var session = await RequireMultiplayer().CreateSessionAsync(BuildHostOptions(seats, handler));
+            var session = await RequireMultiplayer().CreateSessionAsync(
+                BuildHostOptions(seats, isPrivate, hostNick, handler));
             if (session == null)
             {
                 throw new InvalidOperationException("Relay 세션을 만들지 못함");
@@ -209,6 +234,94 @@ namespace Backend.Object.Management
                 throw new InvalidOperationException("방을 찾을 수 없음");
             }
 
+            return await FinishJoinAsync(session);
+        }
+
+        /// <summary>세션 Id 로 Relay 에 붙는다. 공개 방 목록 입장용.</summary>
+        public static async Task<JoinedRelay> JoinByIdAsync(string sessionId, UnityTransport transport)
+        {
+            await EnsureSignedInAsync();
+            var id = sessionId != null ? sessionId.Trim() : string.Empty;
+            if (id.Length == 0)
+            {
+                throw new InvalidOperationException("방을 찾을 수 없음");
+            }
+
+            var handler = new ApplyRelayHandler(transport);
+            ISession session;
+            try
+            {
+                session = await RequireMultiplayer().JoinSessionByIdAsync(id, BuildJoinOptions(handler));
+            }
+            catch (Exception e)
+            {
+                var detail = e.Message ?? string.Empty;
+                if (detail.IndexOf("Cloud", StringComparison.OrdinalIgnoreCase) >= 0
+                    || detail.IndexOf("Authentication", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    throw;
+                }
+
+                throw new InvalidOperationException("방을 찾을 수 없음");
+            }
+
+            return await FinishJoinAsync(session);
+        }
+
+        /// <summary>공개 릴레이 방 목록. 비공개·만석·잠긴 방은 빠진다.</summary>
+        public static async Task<IReadOnlyList<PublicRoomInfo>> QueryPublicAsync()
+        {
+            await EnsureSignedInAsync();
+            QuerySessionsResults results;
+            try
+            {
+                results = await RequireMultiplayer().QuerySessionsAsync(
+                    new QuerySessionsOptions
+                    {
+                        Count = QueryCount,
+                        FilterOptions = new List<FilterOption>
+                        {
+                            new FilterOption(FilterField.StringIndex1, SessionType, FilterOperation.Equal),
+                            new FilterOption(FilterField.AvailableSlots, "0", FilterOperation.Greater),
+                        },
+                    });
+            }
+            catch (Exception)
+            {
+                results = await RequireMultiplayer().QuerySessionsAsync(
+                    new QuerySessionsOptions
+                    {
+                        Count = QueryCount,
+                        FilterOptions = new List<FilterOption>
+                        {
+                            new FilterOption(FilterField.AvailableSlots, "0", FilterOperation.Greater),
+                        },
+                    });
+            }
+
+            var sessions = results != null ? results.Sessions : null;
+            if (sessions == null || sessions.Count == 0)
+            {
+                return Array.Empty<PublicRoomInfo>();
+            }
+
+            var list = new List<PublicRoomInfo>(sessions.Count);
+            for (var i = 0; i < sessions.Count; i++)
+            {
+                var info = sessions[i];
+                if (info == null || info.IsLocked || info.AvailableSlots <= 0)
+                {
+                    continue;
+                }
+
+                list.Add(PublicRoomInfo.From(info));
+            }
+
+            return list;
+        }
+
+        private static async Task<JoinedRelay> FinishJoinAsync(ISession session)
+        {
             if (session == null)
             {
                 throw new InvalidOperationException("방을 찾을 수 없음");
@@ -368,6 +481,43 @@ namespace Backend.Object.Management
 
         /// <summary>게스트가 입력하는 Unity 조인 코드.</summary>
         public string Code { get; }
+    }
+
+    /// <summary>공개 방 목록 한 줄.</summary>
+    public readonly struct PublicRoomInfo
+    {
+        public PublicRoomInfo(string id, string name, int playerCount, int maxPlayers)
+        {
+            Id = id;
+            Name = name;
+            PlayerCount = playerCount;
+            MaxPlayers = maxPlayers;
+        }
+
+        public string Id { get; }
+        public string Name { get; }
+        public int PlayerCount { get; }
+        public int MaxPlayers { get; }
+
+        /// <summary>쿼리 결과에서 표시용 값을 뽑는다.</summary>
+        public static PublicRoomInfo From(ISessionInfo info)
+        {
+            var id = info != null ? info.Id : string.Empty;
+            var name = info != null && !string.IsNullOrEmpty(info.Name) ? info.Name : "방";
+            var max = info != null ? SessionLimits.ClampPlayers(info.MaxPlayers) : SessionLimits.MaxPlayers;
+            var current = info != null ? max - info.AvailableSlots : 0;
+            if (current < 0)
+            {
+                current = 0;
+            }
+
+            if (current > max)
+            {
+                current = max;
+            }
+
+            return new PublicRoomInfo(id, name, current, max);
+        }
     }
 
     /// <summary>게스트가 받은 Relay 세션.</summary>

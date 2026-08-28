@@ -15,6 +15,29 @@ namespace Backend.Object.UI
         private const int NickMax = 12;
         private const int RoomCodeMin = 4;
         private const int RoomCodeMax = 8;
+        private bool _isPrivate;
+
+        /// <summary>호스트가 방을 닫았을 때 로비에 띄울 안내.</summary>
+        public const string HostClosedNotice = "호스트가 방을 종료하였습니다";
+
+        private static string _pendingNotice;
+
+        /// <summary>
+        /// 로비를 열기 전 상태 문구를 넣는다.
+        /// </summary>
+        public static void PrepareNotice(string notice)
+        {
+            _pendingNotice = notice;
+        }
+
+        /// <summary>
+        /// 호스트가 방을 닫은 뒤 로비로 보낸다.
+        /// </summary>
+        public static void OpenAfterHostClosed()
+        {
+            PrepareNotice(HostClosedNotice);
+            UIManager.OpenAsync<LobbyPanel>().Forget();
+        }
 
         /// <summary>
         /// 닉을 복원하고 입력을 구독한다.
@@ -23,15 +46,10 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             View.SetNick(PlayerPrefs.GetString(PrefNick, string.Empty));
-            View.SetLanHost(GatewaySettings.LanHost);
-            View.SetConnectionModeVisible(!WebBuild.IsPlayer);
-            if (WebBuild.IsPlayer)
-            {
-                GatewaySettings.SaveMode(ConnectionMode.Relay);
-            }
-
-            View.SetMode(GatewaySettings.Mode);
-            View.SetStatus(ModeStatus(GatewaySettings.Mode));
+            View.SetVisibility(_isPrivate);
+            var notice = _pendingNotice;
+            _pendingNotice = null;
+            View.SetStatus(!string.IsNullOrEmpty(notice) ? notice : RelayStatus());
             BindView();
         }
 
@@ -46,10 +64,9 @@ namespace Backend.Object.UI
         private void BindView()
         {
             View.NickChanged += OnNickChanged;
-            View.LanHostChanged += OnLanHostChanged;
-            View.ModeClicked += OnModeClicked;
-            View.QuickMatchClicked += OnQuickMatchClicked;
+            View.VisibilityClicked += OnVisibilityClicked;
             View.CreateRoomClicked += OnCreateRoomClicked;
+            View.RoomListClicked += OnRoomListClicked;
             View.JoinRoomClicked += OnJoinRoomClicked;
             View.BackClicked += OnBackClicked;
             View.SettingsClicked += OnSettingsClicked;
@@ -63,10 +80,9 @@ namespace Backend.Object.UI
             }
 
             View.NickChanged -= OnNickChanged;
-            View.LanHostChanged -= OnLanHostChanged;
-            View.ModeClicked -= OnModeClicked;
-            View.QuickMatchClicked -= OnQuickMatchClicked;
+            View.VisibilityClicked -= OnVisibilityClicked;
             View.CreateRoomClicked -= OnCreateRoomClicked;
+            View.RoomListClicked -= OnRoomListClicked;
             View.JoinRoomClicked -= OnJoinRoomClicked;
             View.BackClicked -= OnBackClicked;
             View.SettingsClicked -= OnSettingsClicked;
@@ -82,41 +98,11 @@ namespace Backend.Object.UI
             PlayerPrefs.SetString(PrefNick, normalized);
         }
 
-        private void OnLanHostChanged(string host)
+        private void OnVisibilityClicked(bool isPrivate)
         {
-            GatewaySettings.SaveLanHost(host);
-            View.SetLanHost(GatewaySettings.LanHost);
-            View.SetStatus(string.IsNullOrEmpty(GatewaySettings.LanHost)
-                ? "호스트 IP를 입력하세요"
-                : "호스트 IP 저장됨");
-        }
-
-        private void OnModeClicked(ConnectionMode mode)
-        {
-            if (WebBuild.IsPlayer)
-            {
-                mode = ConnectionMode.Relay;
-            }
-
-            GatewaySettings.SaveMode(mode);
-            View.SetMode(mode);
-            View.SetStatus(ModeStatus(mode));
-        }
-
-        private void OnQuickMatchClicked(int seatCount)
-        {
-            if (!RequireNick(out var nick))
-            {
-                return;
-            }
-
-            if (seatCount != 2 && seatCount != 4 && seatCount != 6)
-            {
-                View.SetStatus("퀵매치는 2·4·6인만 가능");
-                return;
-            }
-
-            OpenRoom(nick, RandomRoomCode(), SessionLimits.ClampPlayers(seatCount), isHost: true);
+            _isPrivate = isPrivate;
+            View.SetVisibility(_isPrivate);
+            View.SetStatus(isPrivate ? "비공개. 방 코드로만 입장" : "공개. 방 목록에 표시");
         }
 
         private void OnCreateRoomClicked()
@@ -126,7 +112,17 @@ namespace Backend.Object.UI
                 return;
             }
 
-            OpenRoom(nick, RandomRoomCode(), SessionLimits.MaxPlayers, isHost: true);
+            OpenRoom(nick, string.Empty, SessionLimits.MaxPlayers, isHost: true, _isPrivate);
+        }
+
+        private void OnRoomListClicked()
+        {
+            if (!RequireNick(out _))
+            {
+                return;
+            }
+
+            UIManager.OpenAsync<RoomListPanel>().Forget();
         }
 
         private void OnJoinRoomClicked()
@@ -146,15 +142,15 @@ namespace Backend.Object.UI
             OpenRoom(nick, code, SessionLimits.MaxPlayers, isHost: false);
         }
 
-        private static void OpenRoom(string nick, string roomCode, int seatCount, bool isHost)
+        private static void OpenRoom(
+            string nick,
+            string roomCode,
+            int seatCount,
+            bool isHost,
+            bool isPrivate = false)
         {
-            RoomPresenter.Prepare(nick, roomCode, seatCount, isHost);
+            RoomPresenter.Prepare(nick, roomCode, seatCount, isHost, isPrivate);
             UIManager.OpenAsync<RoomPanel>().Forget();
-        }
-
-        private static string RandomRoomCode()
-        {
-            return UnityEngine.Random.Range(0, 1000000).ToString("D6");
         }
 
         private void OnBackClicked()
@@ -185,25 +181,21 @@ namespace Backend.Object.UI
             return nick.Length >= NickMin && nick.Length <= NickMax;
         }
 
-        private static string ModeStatus(ConnectionMode mode)
+        private static string RelayStatus()
         {
+            if (!UgsLobbyRelay.IsProjectLinked)
+            {
+                return "릴레이는 Edit > Project Settings > Services 에서 Cloud 연결 필요";
+            }
+
             if (WebBuild.IsPlayer)
             {
-                return UgsLobbyRelay.IsProjectLinked
-                    ? "릴레이. 호스트 화면의 방 코드로 입장. 방을 연 탭을 유지하세요. 한 방 최대 "
-                        + SessionLimits.MaxPlayers
-                        + "인"
-                    : "릴레이는 Edit > Project Settings > Services 에서 Cloud 연결 필요";
+                return "공개 방은 방 목록에서 입장. 방을 연 탭을 유지하세요. 한 방 최대 "
+                    + SessionLimits.MaxPlayers
+                    + "인";
             }
 
-            if (mode == ConnectionMode.Lan)
-            {
-                return "랜. 게스트는 서버 주소에 호스트 IP";
-            }
-
-            return UgsLobbyRelay.IsProjectLinked
-                ? "릴레이. 호스트 화면의 방 코드로 입장. 한 방 최대 " + SessionLimits.MaxPlayers + "인"
-                : "릴레이는 Edit > Project Settings > Services 에서 Cloud 연결 필요";
+            return "공개 방은 방 목록에서 입장. 한 방 최대 " + SessionLimits.MaxPlayers + "인";
         }
 
         /// <summary>Unity 세션 조인 코드(영문·숫자, 대소문자 무시).</summary>

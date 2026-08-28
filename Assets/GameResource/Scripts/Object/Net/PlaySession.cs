@@ -1,6 +1,4 @@
 using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using Backend.App;
 using Backend.Net;
@@ -13,7 +11,7 @@ using UnityEngine;
 namespace Backend.Object.Net
 {
     /// <summary>
-    /// 릴레이·LAN 호스트 세션. 웹소켓 경로는 쓰지 않는다.
+    /// 릴레이 호스트 세션.
     /// </summary>
     public static class PlaySession
     {
@@ -34,37 +32,23 @@ namespace Backend.Object.Net
         /// <summary>호스트 루프백. 매치 Tick 에서 Pump 할 때 쓴다.</summary>
         public static LocalLoopback Loopback => _host != null ? _host.Loopback : null;
 
-        /// <summary>릴레이 또는 LAN 호스트를 연다. 릴레이면 표시용 코드는 Unity 조인 코드다.</summary>
+        /// <summary>릴레이 호스트를 연다. 표시용 코드는 Unity 조인 코드다.</summary>
         public static async UniTask<NetClient> StartHostAsync(
-            ConnectionMode mode,
             string nick,
-            string roomCode,
-            int seatCount)
+            int seatCount,
+            bool isPrivate = false)
         {
             await StopAsync();
             await EnsureNetworkAsync(nick);
             try
             {
-                if (WebBuild.IsPlayer)
-                {
-                    mode = ConnectionMode.Relay;
-                }
-
-                var effectiveCode = roomCode;
-                if (mode == ConnectionMode.Relay)
-                {
-                    var hosted = await UgsLobbyRelay.CreateAsync(
-                        seatCount,
-                        _root.GetComponent<UnityTransport>());
-                    effectiveCode = hosted.Code;
-                    _host.MarkRelayHost();
-                }
-                else
-                {
-                    ApplyLanHost();
-                }
-
-                var client = _host.PrepareHost(seatCount, effectiveCode);
+                var hosted = await UgsLobbyRelay.CreateAsync(
+                    seatCount,
+                    _root.GetComponent<UnityTransport>(),
+                    isPrivate,
+                    nick);
+                _host.MarkRelayHost();
+                var client = _host.PrepareHost(seatCount, hosted.Code);
                 _host.StartListening(isHost: true);
                 return client;
             }
@@ -75,31 +59,27 @@ namespace Backend.Object.Net
             }
         }
 
-        /// <summary>릴레이 또는 LAN 게스트로 붙는다.</summary>
+        /// <summary>릴레이 게스트로 붙는다.</summary>
         public static async UniTask<PlayClientTransport> StartGuestAsync(
-            ConnectionMode mode,
             string nick,
-            string roomCode)
+            string roomCode,
+            string sessionId = null)
         {
             await StopAsync();
             await EnsureNetworkAsync(nick);
             try
             {
-                if (WebBuild.IsPlayer)
+                var transport = _root.GetComponent<UnityTransport>();
+                if (!string.IsNullOrEmpty(sessionId))
                 {
-                    mode = ConnectionMode.Relay;
-                }
-
-                if (mode == ConnectionMode.Relay)
-                {
-                    await UgsLobbyRelay.JoinAsync(roomCode, _root.GetComponent<UnityTransport>());
-                    _host.MarkRelayGuest();
+                    await UgsLobbyRelay.JoinByIdAsync(sessionId, transport);
                 }
                 else
                 {
-                    ApplyLanClient(GatewaySettings.LanHost);
+                    await UgsLobbyRelay.JoinAsync(roomCode, transport);
                 }
 
+                _host.MarkRelayGuest();
                 _guest = new PlayClientTransport();
                 _host.StartListening(isHost: false);
                 _nm.CustomMessagingManager.RegisterNamedMessageHandler(
@@ -156,46 +136,6 @@ namespace Backend.Object.Net
                 UnityEngine.Object.Destroy(root);
                 await WaitSingletonClearedAsync();
             }
-        }
-
-        /// <summary>이 기기의 LAN IPv4. DNS 조회 없이 어댑터만 본다. WebGL 은 빈 문자열.</summary>
-        public static string LocalIpv4()
-        {
-            if (WebBuild.IsPlayer)
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                foreach (var adapter in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (adapter.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
-                    {
-                        continue;
-                    }
-
-                    if (adapter.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
-                    {
-                        continue;
-                    }
-
-                    var props = adapter.GetIPProperties();
-                    for (var i = 0; i < props.UnicastAddresses.Count; i++)
-                    {
-                        var addr = props.UnicastAddresses[i].Address;
-                        if (addr.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(addr))
-                        {
-                            return addr.ToString();
-                        }
-                    }
-                }
-            }
-            catch (Exception)
-            {
-            }
-
-            return string.Empty;
         }
 
         private static async UniTask EnsureNetworkAsync(string nick)
@@ -263,32 +203,6 @@ namespace Backend.Object.Net
             {
                 await UniTask.Yield();
             }
-        }
-
-        private static void ApplyLanHost()
-        {
-            var utp = _root.GetComponent<UnityTransport>();
-            utp.SetConnectionData("0.0.0.0", SessionLimits.LanPort, "0.0.0.0");
-        }
-
-        private static void ApplyLanClient(string hostIp)
-        {
-            var ip = hostIp != null ? hostIp.Trim() : string.Empty;
-            if (ip.StartsWith("ws://", StringComparison.OrdinalIgnoreCase)
-                || ip.StartsWith("wss://", StringComparison.OrdinalIgnoreCase)
-                || ip.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                || ip.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("랜은 서버 주소에 호스트 IP만 넣으세요");
-            }
-
-            if (string.IsNullOrEmpty(ip))
-            {
-                throw new InvalidOperationException("서버 주소에 호스트 LAN IP를 넣으세요");
-            }
-
-            var utp = _root.GetComponent<UnityTransport>();
-            utp.SetConnectionData(ip, SessionLimits.LanPort);
         }
 
         private static void OnGuestEvent(ulong sender, FastBufferReader reader)

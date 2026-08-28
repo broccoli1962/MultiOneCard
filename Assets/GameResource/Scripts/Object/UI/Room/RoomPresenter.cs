@@ -15,7 +15,6 @@ namespace Backend.Object.UI
     {
         private const int DefaultSeatCount = 6;
         private const int ChatMaxChars = 80;
-        private const int LanEventTimeoutMs = 5000;
         private const int RelayEventTimeoutMs = 20000;
         private const int WebRelayEventTimeoutMs = 45000;
 
@@ -23,15 +22,20 @@ namespace Backend.Object.UI
             WebBuild.IsPlayer ? WebRelayEventTimeoutMs : RelayEventTimeoutMs;
 
         private static string _pendingNick = "P0";
-        private static string _pendingRoomCode = "000000";
+        private static string _pendingRoomCode = string.Empty;
+        private static string _pendingSessionId;
         private static int _pendingSeatCount = DefaultSeatCount;
         private static bool _pendingIsHost = true;
+        private static bool _pendingIsPrivate;
+        private static NetClient _pendingResumeClient;
+        private static int _pendingResumeSeat;
 
         private PlayClientTransport _playGuest;
         private NetClient _client;
         private int _localSeat;
         private bool _isHost;
         private bool _handedToMatch;
+        private bool _leaving;
         private bool _seatConfirmed;
         private bool _gotEvent;
         private bool _transportReady;
@@ -43,12 +47,46 @@ namespace Backend.Object.UI
         /// <summary>
         /// 로비에서 대기실을 열기 전 세션 인자를 넣는다.
         /// </summary>
-        public static void Prepare(string nick, string roomCode, int seatCount, bool isHost)
+        public static void Prepare(
+            string nick,
+            string roomCode,
+            int seatCount,
+            bool isHost,
+            bool isPrivate = false,
+            string sessionId = null)
         {
             _pendingNick = string.IsNullOrEmpty(nick) ? "P0" : nick;
             _pendingRoomCode = NormalizeRoomCode(roomCode);
+            _pendingSessionId = sessionId != null ? sessionId.Trim() : string.Empty;
             _pendingSeatCount = ClampSeatCount(seatCount);
             _pendingIsHost = isHost;
+            _pendingIsPrivate = isPrivate;
+            _pendingResumeClient = null;
+            _pendingResumeSeat = 0;
+        }
+
+        /// <summary>
+        /// 재대결 반대 후 같은 세션으로 대기실을 다시 연다. Open 전에 호출한다.
+        /// </summary>
+        public static void PrepareResume(NetClient client, int localSeat)
+        {
+            _pendingResumeClient = client;
+            _pendingResumeSeat = localSeat;
+            var room = client != null ? client.Room : null;
+            _pendingSeatCount = room != null && room.seatCount >= 2
+                ? ClampSeatCount(room.seatCount)
+                : DefaultSeatCount;
+            _pendingRoomCode = room != null && !string.IsNullOrEmpty(room.roomCode)
+                ? room.roomCode
+                : string.Empty;
+            _pendingIsHost = room != null && room.hostSeat == localSeat;
+            _pendingIsPrivate = false;
+            if (room != null && room.nicks != null
+                && localSeat >= 0 && localSeat < room.nicks.Length
+                && !string.IsNullOrEmpty(room.nicks[localSeat]))
+            {
+                _pendingNick = room.nicks[localSeat];
+            }
         }
 
         /// <summary>
@@ -58,6 +96,13 @@ namespace Backend.Object.UI
         {
             View.EnsureLayout();
             BindView();
+            _leaving = false;
+            if (_pendingResumeClient != null)
+            {
+                AttachResume();
+                return;
+            }
+
             StartRoomAsync().Forget();
         }
 
@@ -85,14 +130,24 @@ namespace Backend.Object.UI
             }
 
             PlaySession.Pump();
+            if (_leaving || _handedToMatch || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            if (!_isHost && _transportReady && _client != null && !_client.IsConnected)
+            {
+                HandleHostClosed();
+                return;
+            }
+
             if (!_transportReady || _gotEvent || _connectStartedMs <= 0)
             {
                 return;
             }
 
             var waited = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _connectStartedMs;
-            var limit = GatewaySettings.Mode == ConnectionMode.Relay ? RelayTimeoutMs : LanEventTimeoutMs;
-            if (waited > limit && _status != null && _status.IndexOf("연결할 수 없음", StringComparison.Ordinal) < 0)
+            if (waited > RelayTimeoutMs && _status != null && _status.IndexOf("연결할 수 없음", StringComparison.Ordinal) < 0)
             {
                 _status = "서버에 연결할 수 없음  " + ConnectHint();
                 Refresh();
@@ -103,10 +158,17 @@ namespace Backend.Object.UI
         {
             View.ReadyClicked += OnReadyClicked;
             View.StartClicked += OnStartClicked;
+            View.CopyCodeClicked += OnCopyCodeClicked;
             View.RulesClicked += OnRulesClicked;
             View.ChatClicked += OnChatClicked;
             View.BackClicked += OnBackClicked;
             View.SlotClicked += OnSlotClicked;
+            if (View.Rules != null)
+            {
+                View.Rules.CardListClicked += OnCardListClicked;
+                View.Rules.CloseClicked += OnRulesCloseClicked;
+            }
+
             if (View.Chat != null)
             {
                 View.Chat.SendClicked += OnChatSendClicked;
@@ -123,14 +185,78 @@ namespace Backend.Object.UI
 
             View.ReadyClicked -= OnReadyClicked;
             View.StartClicked -= OnStartClicked;
+            View.CopyCodeClicked -= OnCopyCodeClicked;
             View.RulesClicked -= OnRulesClicked;
             View.ChatClicked -= OnChatClicked;
             View.BackClicked -= OnBackClicked;
             View.SlotClicked -= OnSlotClicked;
+            if (View.Rules != null)
+            {
+                View.Rules.CardListClicked -= OnCardListClicked;
+                View.Rules.CloseClicked -= OnRulesCloseClicked;
+            }
+
             if (View.Chat != null)
             {
                 View.Chat.SendClicked -= OnChatSendClicked;
                 View.Chat.QuickClicked -= OnQuickClicked;
+            }
+        }
+
+        private void AttachResume()
+        {
+            var client = _pendingResumeClient;
+            var seat = _pendingResumeSeat;
+            _pendingResumeClient = null;
+            _pendingResumeSeat = 0;
+            StopRoom();
+            _client = client;
+            _localSeat = seat < 0 ? 0 : seat;
+            _isHost = _pendingIsHost;
+            _handedToMatch = false;
+            _leaving = false;
+            _seatConfirmed = true;
+            _transportReady = true;
+            _gotEvent = true;
+            _connectStartedMs = 0;
+            _status = "준비하세요";
+            _rulesVisible = false;
+            _chatVisible = false;
+            View.SetRulesVisible(false);
+            View.SetChatVisible(false);
+            if (View.Chat != null)
+            {
+                View.Chat.ClearLog();
+                View.Chat.ClearInput();
+                ReplayResumeChat();
+                View.Chat.Append(ChatType.System, null, "대기실로 돌아왔습니다", null);
+            }
+
+            if (_client != null)
+            {
+                _client.EventReceived += OnNetEvent;
+            }
+
+            Refresh();
+        }
+
+        private void ReplayResumeChat()
+        {
+            if (View.Chat == null || _client == null)
+            {
+                return;
+            }
+
+            var history = _client.RecentChat;
+            for (var i = 0; i < history.Count; i++)
+            {
+                var ev = history[i];
+                if (ev == null)
+                {
+                    continue;
+                }
+
+                View.Chat.Append(ev.chatType, ResolveNick(ev.seat), ev.text, ev.quickId);
             }
         }
 
@@ -142,7 +268,7 @@ namespace Backend.Object.UI
             _localSeat = _isHost ? 0 : -1;
             _seatConfirmed = false;
             _transportReady = false;
-            _status = GatewaySettings.Mode == ConnectionMode.Relay ? "릴레이 연결 중" : "서버에 연결 중";
+            _status = "릴레이 연결 중";
             _rulesVisible = false;
             _chatVisible = false;
             View.SetRulesVisible(false);
@@ -181,24 +307,22 @@ namespace Backend.Object.UI
             _transportReady = true;
             _connectStartedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            var lanHint = GatewaySettings.Mode == ConnectionMode.Lan && _isHost
-                ? "  IP " + PlaySession.LocalIpv4()
-                : string.Empty;
-            View.Chat.Append(ChatType.System, null, "대기실에 입장했습니다" + lanHint, null);
+            View.Chat.Append(ChatType.System, null, "대기실에 입장했습니다", null);
             Refresh();
         }
 
         private async UniTask AttachTransportAsync()
         {
-            var mode = GatewaySettings.Mode;
             var seats = SessionLimits.ClampPlayers(_pendingSeatCount);
             if (_isHost)
             {
-                _client = await PlaySession.StartHostAsync(mode, _pendingNick, _pendingRoomCode, seats);
+                _client = await PlaySession.StartHostAsync(
+                    _pendingNick,
+                    seats,
+                    _pendingIsPrivate);
                 _localSeat = 0;
                 _seatConfirmed = true;
-                if (mode == ConnectionMode.Relay
-                    && !string.IsNullOrEmpty(UgsLobbyRelay.HostedJoinCode))
+                if (!string.IsNullOrEmpty(UgsLobbyRelay.HostedJoinCode))
                 {
                     _pendingRoomCode = UgsLobbyRelay.HostedJoinCode;
                 }
@@ -210,7 +334,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _playGuest = await PlaySession.StartGuestAsync(mode, _pendingNick, _pendingRoomCode);
+            _playGuest = await PlaySession.StartGuestAsync(_pendingNick, _pendingRoomCode, _pendingSessionId);
             _client = new NetClient(_playGuest, 0);
         }
 
@@ -349,6 +473,12 @@ namespace Backend.Object.UI
                 View.NotifyChatArrived();
             }
 
+            if (ev.ev == EvCode.RoomClosed)
+            {
+                HandleHostClosed();
+                return;
+            }
+
             if (ev.ev == EvCode.MatchStarted)
             {
                 _status = "시작";
@@ -421,6 +551,32 @@ namespace Backend.Object.UI
             Refresh();
         }
 
+        private void OnCopyCodeClicked()
+        {
+            var code = CurrentRoomCode();
+            if (string.IsNullOrEmpty(code))
+            {
+                _status = "방 코드가 아직 없습니다";
+                Refresh();
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = code;
+            _status = "코드 복사됨";
+            Refresh();
+        }
+
+        private string CurrentRoomCode()
+        {
+            var room = LocalClient() != null ? LocalClient().Room : null;
+            if (room != null && !string.IsNullOrEmpty(room.roomCode))
+            {
+                return room.roomCode;
+            }
+
+            return _pendingRoomCode;
+        }
+
         private void OnStartClicked()
         {
             if (!_isHost)
@@ -446,6 +602,17 @@ namespace Backend.Object.UI
             View.SetRulesVisible(_rulesVisible);
         }
 
+        private void OnRulesCloseClicked()
+        {
+            _rulesVisible = false;
+            View.SetRulesVisible(false);
+        }
+
+        private void OnCardListClicked()
+        {
+            UIManager.OpenAsync<CardListPanel>().Forget();
+        }
+
         private void OnChatClicked()
         {
             _chatVisible = !_chatVisible;
@@ -454,7 +621,24 @@ namespace Backend.Object.UI
 
         private void OnBackClicked()
         {
+            _leaving = true;
             UIManager.Close(View);
+        }
+
+        private void HandleHostClosed()
+        {
+            if (_leaving || _handedToMatch || GameStateUtil.IsQuitting)
+            {
+                return;
+            }
+
+            _leaving = true;
+            if (View != null)
+            {
+                UIManager.Close(View);
+            }
+
+            LobbyPresenter.OpenAfterHostClosed();
         }
 
         private void OnSlotClicked(int seat)
@@ -566,11 +750,6 @@ namespace Backend.Object.UI
 
         private static string ConnectHint()
         {
-            if (GatewaySettings.Mode == ConnectionMode.Lan)
-            {
-                return "랜 " + GatewaySettings.LanHost;
-            }
-
             return "릴레이";
         }
 
@@ -581,17 +760,7 @@ namespace Backend.Object.UI
 
         private static string NormalizeRoomCode(string roomCode)
         {
-            if (string.IsNullOrEmpty(roomCode))
-            {
-                return RandomRoomCode();
-            }
-
-            return roomCode.Trim();
-        }
-
-        private static string RandomRoomCode()
-        {
-            return UnityEngine.Random.Range(0, 1000000).ToString("D6");
+            return roomCode != null ? roomCode.Trim() : string.Empty;
         }
     }
 }

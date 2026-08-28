@@ -16,9 +16,11 @@ namespace Backend.Object.UI
         [SerializeField] private TMP_FontAsset _font;
         [SerializeField] private TextMeshProUGUI _titleText;
         [SerializeField] private TextMeshProUGUI _roomCodeText;
+        [SerializeField] private CommonButton _copyCodeButton;
         [SerializeField] private TextMeshProUGUI _statusText;
         [SerializeField] private TextMeshProUGUI _rulesText;
         [SerializeField] private GameObject _rulesRoot;
+        [SerializeField] private RulesView _rulesView;
         [SerializeField] private ChatView _chatView;
         [SerializeField] private CommonButton _readyButton;
         [SerializeField] private CommonButton _startButton;
@@ -42,6 +44,9 @@ namespace Backend.Object.UI
         /// <summary>채팅 패널 토글.</summary>
         public event Action ChatClicked;
 
+        /// <summary>방 코드 복사.</summary>
+        public event Action CopyCodeClicked;
+
         /// <summary>로비로 돌아가기.</summary>
         public event Action BackClicked;
 
@@ -50,6 +55,9 @@ namespace Backend.Object.UI
 
         /// <summary>채팅 서브뷰.</summary>
         public ChatView Chat => _chatView;
+
+        /// <summary>규칙 오버레이.</summary>
+        public RulesView Rules => _rulesView;
 
         protected override bool DefaultHandleBackButton => true;
 
@@ -80,6 +88,7 @@ namespace Backend.Object.UI
 
             _titleText ??= FindOrCreateText("Title");
             _roomCodeText ??= FindOrCreateText("RoomCode");
+            _copyCodeButton ??= FindOrCreateButton("CopyCode");
             EnsureSlots();
             _readyButton ??= FindOrCreateButton("Ready");
             _startButton ??= FindOrCreateButton("Start");
@@ -89,13 +98,24 @@ namespace Backend.Object.UI
             _backButton ??= FindOrCreateButton("Back");
             _chatView ??= FindOrCreateChat();
             _rulesRoot ??= FindOrCreate("RulesRoot");
+            if (_rulesRoot != null)
+            {
+                _rulesView ??= _rulesRoot.GetComponent<RulesView>();
+            }
+
             if (_rulesText == null && _rulesRoot != null)
             {
-                var body = _rulesRoot.transform.Find("RulesBody");
+                var body = _rulesRoot.transform.Find("RulesBody")
+                    ?? _rulesRoot.transform.Find("RulesScroll/Viewport/Content/RulesBody");
                 if (body != null)
                 {
                     body.TryGetComponent(out _rulesText);
                 }
+            }
+
+            if (_rulesView != null)
+            {
+                _rulesView.EnsureLayout();
             }
 
             if (_chatView != null)
@@ -110,6 +130,7 @@ namespace Backend.Object.UI
 
             BindButton(_readyButton, () => ReadyClicked?.Invoke());
             BindButton(_startButton, () => StartClicked?.Invoke());
+            BindButton(_copyCodeButton, () => CopyCodeClicked?.Invoke());
             BindButton(_rulesButton, () => RulesClicked?.Invoke());
             BindButton(_chatButton, () => ChatClicked?.Invoke());
             BindButton(_backButton, () => BackClicked?.Invoke());
@@ -133,6 +154,11 @@ namespace Backend.Object.UI
             if (_roomCodeText != null)
             {
                 _roomCodeText.text = "코드 " + code;
+            }
+
+            if (_copyCodeButton != null)
+            {
+                _copyCodeButton.CachedGameObject.SetActive(code != "------");
             }
 
             if (_statusText != null)
@@ -196,6 +222,20 @@ namespace Backend.Object.UI
         public void SetRulesVisible(bool visible)
         {
             EnsureLayout();
+            if (_rulesView != null)
+            {
+                if (visible)
+                {
+                    _rulesView.Show();
+                }
+                else
+                {
+                    _rulesView.Hide();
+                }
+
+                return;
+            }
+
             if (_rulesRoot != null)
             {
                 _rulesRoot.SetActive(visible);

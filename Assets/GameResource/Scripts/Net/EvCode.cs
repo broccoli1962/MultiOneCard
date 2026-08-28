@@ -21,6 +21,7 @@ namespace Backend.Net
         public const string PlayerDisconnected = "PlayerDisconnected";
         public const string PlayerRejoined = "PlayerRejoined";
         public const string PlayerOut = "PlayerOut";
+        public const string RoomClosed = "RoomClosed";
         public const string Chat = "Chat";
         public const string MatchEnded = "MatchEnded";
 

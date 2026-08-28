@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: UI
   m_GUID: b48e10bce2f495d47ae298b92231fb02
   m_SerializeEntries:
+  - m_GUID: 1be9e5ea503a963439d69b1963d6f1a4
+    m_Address: UI/CardListPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 23d8f96492b5e8040a12700a333dd0f2
     m_Address: UI/RoomPanel.prefab
     m_ReadOnly: 0
@@ -37,6 +42,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bf1bec1c1c5bf6845afba56d9a0af998
     m_Address: UI/LobbyPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c5605ffef9e88b244b7f0918a4044b93
+    m_Address: UI/RoomListPanel.prefab
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

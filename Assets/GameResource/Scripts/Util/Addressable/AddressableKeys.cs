@@ -120,12 +120,15 @@ namespace Backend.AddressableKey
         {
             private static readonly Dictionary<string, string> Keys = new Dictionary<string, string>()
             {
+                { "UI_CardListPanel_prefab", "UI/CardListPanel.prefab" },
                 { "UI_RoomPanel_prefab", "UI/RoomPanel.prefab" },
                 { "UI_TitlePanel_prefab", "UI/TitlePanel.prefab" },
                 { "UI_ResultPanel_prefab", "UI/ResultPanel.prefab" },
+                { "CardListPanel", "UI/CardListPanel.prefab" },
                 { "LobbyPanel", "UI/LobbyPanel.prefab" },
                 { "MatchPanel", "UI/MatchPanel.prefab" },
                 { "ResultPanel", "UI/ResultPanel.prefab" },
+                { "RoomListPanel", "UI/RoomListPanel.prefab" },
                 { "RoomPanel", "UI/RoomPanel.prefab" },
                 { "SettingsPopup", "UI/SettingsPopup.prefab" },
                 { "TitlePanel", "UI/TitlePanel.prefab" },
@@ -133,6 +136,7 @@ namespace Backend.AddressableKey
                 { "UI_LobbyPanel_prefab", "UI/LobbyPanel.prefab" },
                 { "UI_MatchPanel_prefab", "UI/MatchPanel.prefab" },
                 { "UI_SettingsPopup_prefab", "UI/SettingsPopup.prefab" },
+                { "UI_RoomListPanel_prefab", "UI/RoomListPanel.prefab" },
             };
 
             public static string Get<T>() => Keys.TryGetValue(typeof(T).Name, out var key) ? key : null;

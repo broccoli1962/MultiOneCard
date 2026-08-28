@@ -22,9 +22,6 @@ namespace Backend.App
         /// <summary>이 기기가 동시에 호스트할 수 있는 방 수.</summary>
         public const int MaxHostedSessions = 1;
 
-        /// <summary>LAN Unity Transport 포트. 릴레이를 쓰지 않는다.</summary>
-        public const ushort LanPort = 7778;
-
         /// <summary>2..6 으로 자른다.</summary>
         public static int ClampPlayers(int seatCount)
         {
