@@ -106,8 +106,8 @@ namespace Game.Rules
         /// 공격 응답: PASS, COUNTER(체인 1회), SPEAR, (공개 top이 죽창이 아니면) 3·4 방어, 또는 공격 카드(2/A/조커).
         /// 2·A 이어가기는 같은 랭크(색·문양 무관) 또는 같은 문양의 2·A. 조커·죽창 위 2·A는 테이블 색 일치.
         /// 조커 위 조커는 색 무관. 2·A 위 조커는 테이블 색 일치.
+        /// 패스·역날검으로 덮이면 2·A·조커·3·4는 색·문양·랭크 무관. 죽창 top은 3·4 불가.
         /// 3·4는 공개 top이 죽창일 때만 불가. 아니면 AttackDefendSuit(또는 지정/top 문양) 일치, 조커 공격이면 JokerDefendable 시 같은 색.
-        /// 패스·역날검 top이어도 AttackDefend* 가 남으면 방어·이어가기 가능.
         /// 공격 응답 무색은 죽창·패스·역날검뿐.
         /// </summary>
         private static bool CanPlayAttackResponse(
@@ -134,19 +134,28 @@ namespace Game.Rules
 
             if (IsThreeOrFour(card))
             {
-                return discardTop.Spec != SpecKind.Spear
-                    && MatchesDefend(
-                        card,
-                        discardTop,
-                        requiredSuit,
-                        attackDefendSuit,
-                        attackDefendColor,
-                        jokerDefendable);
+                if (discardTop.Spec == SpecKind.Spear)
+                {
+                    return false;
+                }
+
+                if (IsPassOrCounterTop(discardTop))
+                {
+                    return true;
+                }
+
+                return MatchesDefend(
+                    card,
+                    discardTop,
+                    requiredSuit,
+                    attackDefendSuit,
+                    attackDefendColor,
+                    jokerDefendable);
             }
 
             if (card.IsJoker)
             {
-                if (IsJokerAttack(discardTop, attackDefendColor))
+                if (IsJokerAttack(discardTop, attackDefendColor) || IsPassOrCounterTop(discardTop))
                 {
                     return true;
                 }
@@ -157,6 +166,11 @@ namespace Game.Rules
             if (card.Rank != Rank.Two && card.Rank != Rank.Ace)
             {
                 return false;
+            }
+
+            if (IsPassOrCounterTop(discardTop))
+            {
+                return true;
             }
 
             return MatchesAttackStack(
@@ -207,11 +221,17 @@ namespace Game.Rules
         /// 7은 와일드가 아니며, 다른 랭크 위에서는 테이블 색과 같을 때만 무늬·랭크 매칭.
         /// 7 위 7은 색과 무관하게 랭크 매칭 허용.
         /// 버림 top이 색 있는 조커면 그 색 락(다른 색 문양 불가).
-        /// top이 무색 와일드이고 무늬 지정이 없으면 아무 장.
+        /// top이 무색 와일드(죽창·패스·역날검·미러·리버스조커)이고 무늬 지정이 없으면
+        /// 조커·7을 포함한 아무 장. 패스·역날검은 일반 턴 불가.
         /// 아니면 requiredSuit(없으면 top 무늬) 또는 top 랭크.
         /// </summary>
         private static bool CanPlayNormal(CardDef card, CardDef discardTop, Suit? requiredSuit)
         {
+            if (IsColorlessOpenTop(discardTop, requiredSuit))
+            {
+                return !IsAttackResponseOnly(card);
+            }
+
             if (card.IsJoker)
             {
                 return JokerMatchesTableColor(card, discardTop, requiredSuit, null);
@@ -258,6 +278,25 @@ namespace Game.Rules
             return card.Spec == SpecKind.Pass || card.Spec == SpecKind.Counter;
         }
 
+        /// <summary>패스·역날검으로 공격을 덮은 상태.</summary>
+        private static bool IsPassOrCounterTop(CardDef discardTop)
+        {
+            return discardTop != null
+                && (discardTop.Spec == SpecKind.Pass || discardTop.Spec == SpecKind.Counter);
+        }
+
+        /// <summary>
+        /// 일반 턴에서 무색 공개 top(죽창·패스·역날검·미러·리버스조커).
+        /// 알약은 색이 있어 제외. 7 지정 무늬가 있으면 제외.
+        /// </summary>
+        private static bool IsColorlessOpenTop(CardDef discardTop, Suit? requiredSuit)
+        {
+            return !requiredSuit.HasValue
+                && discardTop != null
+                && discardTop.IsColorless
+                && discardTop.Color == ColorGroup.None;
+        }
+
         private static bool IsNormalTurnWild(CardDef card)
         {
             return card.IsWild && !card.IsJoker && !IsAttackResponseOnly(card);
@@ -278,7 +317,7 @@ namespace Game.Rules
 
         /// <summary>
         /// 흑·적·청 조커는 테이블 색(락 → 지정 무늬 → 버림 top)과 본인 색이 같을 때만.
-        /// 버림이 무색이면 조커를 낼 수 없다.
+        /// 일반 턴 무색 공개 top은 <see cref="IsColorlessOpenTop"/> 에서 먼저 허용한다.
         /// </summary>
         private static bool JokerMatchesTableColor(
             CardDef joker,

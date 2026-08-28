@@ -8,7 +8,8 @@ namespace Game.Rules
     /// ChooseSuit / ChooseQueenMode / AcceptQueen / GiveCards / ChooseKingMode / HideUnder /
     /// ApplyTimeout / Surrender / ComputeStandings.
     /// 랭크 특수: 7 문양, J 스킵, Q Reverse·Give(같은 문양 3·4로 방어 가능, 감수 후 1장 지급), K Extra·Hide(숨김은 공개 제외).
-    /// 공격: 2·A는 같은 랭크(색 무관) 또는 같은 문양으로 이어가기, 조커 위 2·A는 색 일치. 조커 위 조커는 색 무관. 조커 방어는 JokerDefendable 시 같은 색 3·4.
+    /// 공격: 2·A는 같은 랭크(색 무관) 또는 같은 문양으로 이어가기, 조커 위 2·A는 색 일치. 조커 위 조커는 색 무관.
+    /// 패스·역날검으로 덮이면 2·A·조커·3·4는 색·랭크 무관. 죽창 top은 3·4 불가.
     /// 초과: 일반 드로우1, 공격 스택, Q Reverse/점수순 1장 지급, K만/낮은 점수 숨김, 7 원래 무늬, 미러 높은 점수.
     /// 연속 타임아웃 3회=기권. 손패 20장 이상=파산(기권과 동일). 점프·리버스는 활성 좌석만 센다.
     /// </summary>
