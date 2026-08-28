@@ -862,7 +862,7 @@ namespace Backend.Editor
             var dest = Path.Combine(Directory.GetParent(Application.dataPath).FullName, GitHubWebFolder);
             if (Directory.Exists(dest))
             {
-                Directory.Delete(dest, true);
+                ClearDirectoryExceptGit(dest);
             }
 
             CopyDirectory(webGlOutputDir, dest);
@@ -870,6 +870,55 @@ namespace Backend.Editor
             RewriteIndexForUncompressed(Path.Combine(dest, "index.html"));
             File.WriteAllText(Path.Combine(dest, ".nojekyll"), string.Empty);
             return dest;
+        }
+
+        private static void ClearDirectoryExceptGit(string dest)
+        {
+            var files = Directory.GetFiles(dest);
+            for (var i = 0; i < files.Length; i++)
+            {
+                var name = Path.GetFileName(files[i]);
+                if (name == ".gitattributes" || name == ".gitignore" || name == "README.md")
+                {
+                    continue;
+                }
+
+                DeleteFileForce(files[i]);
+            }
+
+            var dirs = Directory.GetDirectories(dest);
+            for (var i = 0; i < dirs.Length; i++)
+            {
+                if (Path.GetFileName(dirs[i]) == ".git")
+                {
+                    continue;
+                }
+
+                DeleteDirectoryForce(dirs[i]);
+            }
+        }
+
+        private static void DeleteDirectoryForce(string path)
+        {
+            var files = Directory.GetFiles(path);
+            for (var i = 0; i < files.Length; i++)
+            {
+                DeleteFileForce(files[i]);
+            }
+
+            var dirs = Directory.GetDirectories(path);
+            for (var i = 0; i < dirs.Length; i++)
+            {
+                DeleteDirectoryForce(dirs[i]);
+            }
+
+            Directory.Delete(path, false);
+        }
+
+        private static void DeleteFileForce(string path)
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
         }
 
         private static void CopyDirectory(string src, string dest)
