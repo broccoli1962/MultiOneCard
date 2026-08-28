@@ -65,8 +65,9 @@ namespace Backend.Editor
             EditorGUILayout.HelpBox(
                 "선택한 플랫폼을 순서대로 전환해 빌드합니다. 전환 때 에디터가 다시 로드되며 이 창은 이어서 진행합니다.\n"
                 + "Windows 환경의 모바일은 Android 입니다. iOS 는 Mac 이 필요합니다.\n"
-                + "WebGL 은 빌드 후 web 폴더를 공개 저장소 MultiOneCard-web 에 올리면 브라우저에서 실행됩니다.\n"
-                + MultiPlatformBuildRunner.GitHubPagesUrl,
+                + "WebGL 은 빌드 후 WebPlayer 와 web 폴더를 갱신합니다. MultiOneCard / MultiOneCard-web Pages 에 올리면 브라우저에서 실행됩니다.\n"
+                + MultiPlatformBuildRunner.GitHubPagesUrl + "\n"
+                + MultiPlatformBuildRunner.GitHubPagesUrlSource,
                 MessageType.Info);
 
             DrawVersionRow();
@@ -407,7 +408,9 @@ namespace Backend.Editor
         public const string IdAndroid = "Android";
         public const string IdWeb = "WebGL";
         public const string GitHubPagesUrl = "https://broccoli1962.github.io/MultiOneCard-web/";
+        public const string GitHubPagesUrlSource = "https://broccoli1962.github.io/MultiOneCard/";
         private const string GitHubWebFolder = "web";
+        private const string GitHubPlayerFolder = "WebPlayer";
 
         [MenuItem("Tools/OneTable/Prepare GitHub Web Player", priority = 11)]
         public static void PrepareGitHubWebPlayerMenu()
@@ -428,8 +431,9 @@ namespace Backend.Editor
                 EditorUtility.RevealInFinder(published);
                 EditorUtility.DisplayDialog(
                     "GitHub Web",
-                    "web 폴더를 공개 저장소 MultiOneCard-web 에 푸시하면 실행됩니다.\n\n"
-                    + GitHubPagesUrl,
+                    "WebPlayer 는 MultiOneCard Pages, web 은 MultiOneCard-web 에 푸시하면 실행됩니다.\n\n"
+                    + GitHubPagesUrl + "\n"
+                    + GitHubPagesUrlSource,
                     "확인");
             }
             catch (Exception e)
@@ -579,7 +583,7 @@ namespace Backend.Editor
                             try
                             {
                                 var published = PublishWebPlayer(OutputPath(id));
-                                Append(id + ": GitHub 웹 폴더  " + published);
+                                Append(id + ": GitHub 웹 폴더  " + published + " / WebPlayer");
                             }
                             catch (Exception pubEx)
                             {
@@ -850,7 +854,8 @@ namespace Backend.Editor
         }
 
         /// <summary>
-        /// GitHub Pages 는 gzip Content-Encoding 을 붙이지 않으므로 .gz 를 풀어 web 폴더에 복사한다.
+        /// GitHub Pages 는 gzip Content-Encoding 을 붙이지 않으므로 .gz 를 풀어
+        /// web(MultiOneCard-web) 과 WebPlayer(이 저장소 Pages) 에 복사한다.
         /// </summary>
         internal static string PublishWebPlayer(string webGlOutputDir)
         {
@@ -859,17 +864,49 @@ namespace Backend.Editor
                 throw new DirectoryNotFoundException(webGlOutputDir ?? "WebGL");
             }
 
-            var dest = Path.Combine(Directory.GetParent(Application.dataPath).FullName, GitHubWebFolder);
+            var root = Directory.GetParent(Application.dataPath).FullName;
+            var webDest = Path.Combine(root, GitHubWebFolder);
+            PublishWebPlayerTo(webGlOutputDir, webDest, keepGitMetadata: true);
+            PublishWebPlayerTo(
+                webGlOutputDir,
+                Path.Combine(root, GitHubPlayerFolder),
+                keepGitMetadata: false);
+            return webDest;
+        }
+
+        private static void PublishWebPlayerTo(string webGlOutputDir, string dest, bool keepGitMetadata)
+        {
             if (Directory.Exists(dest))
             {
-                ClearDirectoryExceptGit(dest);
+                if (keepGitMetadata)
+                {
+                    ClearDirectoryExceptGit(dest);
+                }
+                else
+                {
+                    ClearDirectoryAll(dest);
+                }
             }
 
             CopyDirectory(webGlOutputDir, dest);
             DecompressGzipUnder(Path.Combine(dest, "Build"));
             RewriteIndexForUncompressed(Path.Combine(dest, "index.html"));
             File.WriteAllText(Path.Combine(dest, ".nojekyll"), string.Empty);
-            return dest;
+        }
+
+        private static void ClearDirectoryAll(string dest)
+        {
+            var files = Directory.GetFiles(dest);
+            for (var i = 0; i < files.Length; i++)
+            {
+                DeleteFileForce(files[i]);
+            }
+
+            var dirs = Directory.GetDirectories(dest);
+            for (var i = 0; i < dirs.Length; i++)
+            {
+                DeleteDirectoryForce(dirs[i]);
+            }
         }
 
         private static void ClearDirectoryExceptGit(string dest)

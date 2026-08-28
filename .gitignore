@@ -16,7 +16,7 @@
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
-# GitHub Pages 용 WebGL 복사본. 공개 저장소 MultiOneCard-web 으로 올린다.
+# 로컬 MultiOneCard-web 클론. 이 저장소 Pages 산출물은 WebPlayer/
 /web/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/

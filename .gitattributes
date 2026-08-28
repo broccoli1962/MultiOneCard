@@ -169,3 +169,10 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# WebGL 플레이어. Pages 가 LFS 포인터를 내려주지 않게 한다.
+WebPlayer/**/*.png -filter -diff -merge binary
+WebPlayer/**/*.ico -filter -diff -merge binary
+*.unityweb binary
+*.bundle binary
+WebPlayer/** linguist-generated

@@ -7,7 +7,8 @@
 구현·판정 세부는 [`Docs/spec.md`](Docs/spec.md)가 기준이다. 원카드와의 차이는 [`Docs/rule-changes.md`](Docs/rule-changes.md).
 
 브라우저 플레이: https://broccoli1962.github.io/MultiOneCard-web/  
-소스 저장소가 private 이라 WebGL 은 공개 저장소 [MultiOneCard-web](https://github.com/broccoli1962/MultiOneCard-web) 으로 호스팅한다.
+동일 빌드: https://broccoli1962.github.io/MultiOneCard/  
+WebGL 은 이 저장소 `WebPlayer/` 와 공개 저장소 [MultiOneCard-web](https://github.com/broccoli1962/MultiOneCard-web) 에 같이 올린다.
 
 ---
 
