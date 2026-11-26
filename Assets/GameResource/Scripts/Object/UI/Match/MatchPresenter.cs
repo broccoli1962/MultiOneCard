@@ -16,6 +16,7 @@ namespace Backend.Object.UI
     {
         private const int DUMMY_SEAT_COUNT = 2;
         private const int DUMMY_SEED = 1;
+        private const int ATTACK_SOUND_COUNT = 8;
 
         private static LocalLoopback _pendingLoopback;
         private static NetClient[] _pendingClients;
@@ -448,10 +449,23 @@ namespace Backend.Object.UI
 
             if (ev.ev == EvCode.CardPlayed)
             {
-                if (ev.seq > _lastCardSoundSeq && (!_remote || ev.seat != _localSeat))
+                if (ev.seq > _lastCardSoundSeq)
                 {
                     _lastCardSoundSeq = ev.seq;
-                    AudioManager.PlaySfx(HandLayout.DrawSfxKey);
+                    if (!_remote || ev.seat != _localSeat)
+                    {
+                        AudioManager.PlaySfx(HandLayout.DrawSfxKey);
+                    }
+
+                    if (ev.attackChainLength > 0)
+                    {
+                        var note = System.Math.Min(ev.attackChainLength, ATTACK_SOUND_COUNT);
+                        AudioManager.PlaySfx($"Attack_{note:00}");
+                    }
+                    else if (ev.defended)
+                    {
+                        AudioManager.PlaySfx("Defend");
+                    }
                 }
 
                 _lastPlayedDefId = ev.defId;

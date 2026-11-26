@@ -20,6 +20,8 @@ namespace Backend.Net
         public int instanceId;
         public int[] instanceIds;
         public string defId;
+        public int attackChainLength;
+        public bool defended;
         public string[] defIds;
         public int count;
         public string queenMode;

@@ -45,6 +45,7 @@ namespace Backend.App
         private int _seed;
         private string _phase;
         private MatchState _state;
+        private int _attackChainLength;
         private long _turnDeadlineMs;
         private long _rematchDeadlineMs;
         private int _eventSeq;
@@ -820,7 +821,17 @@ namespace Backend.App
                     var played = Ev(EvCode.CardPlayed, seat);
                     played.ackSeq = ack;
                     played.instanceId = id;
-                    played.defId = DefIdOf(id);
+                    var card = _state.Catalog.GetInstance(id).Def;
+                    played.defId = card.Id;
+                    if (after.AttackStack > before.AttackStack)
+                    {
+                        _attackChainLength = before.AttackStack == 0 ? 1 : _attackChainLength + 1;
+                        played.attackChainLength = _attackChainLength;
+                    }
+
+                    played.defended = (card.Rank == Rank.Three || card.Rank == Rank.Four)
+                        && ((before.AttackStack > 0 && after.AttackStack == 0)
+                            || (before.QueenStack > 0 && after.QueenStack == 0));
                 }
 
                 if (gained.Length == 0)
@@ -1130,6 +1141,7 @@ namespace Backend.App
             var snap = new StateSnap
             {
                 ActingSeat = _state.ActingSeat,
+                AttackStack = _state.AttackStack,
                 QueenStack = _state.QueenStack,
                 KingExtra = _state.KingExtraPending,
                 RequiredSuit = ToSuitCode(_state.RequiredSuit),
@@ -1558,6 +1570,7 @@ namespace Backend.App
         private sealed class StateSnap
         {
             public int ActingSeat;
+            public int AttackStack;
             public int QueenStack;
             public bool KingExtra;
             public string RequiredSuit;

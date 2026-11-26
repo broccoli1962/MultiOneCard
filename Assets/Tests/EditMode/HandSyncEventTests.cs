@@ -18,6 +18,28 @@ namespace Game.Rules.Tests
         private const int Seed = 20260823;
 
         [Test]
+        public void AttackChain_CountsEachStackingCardAndRestartsAfterDefense()
+        {
+            var runtime = StartMatch();
+            var state = runtime.Match;
+            LeaveOnly(state, 0, "S2", "D2", "CA", "HA", CardCatalog.IdJokerColor, CardCatalog.IdSpear, "S8");
+            LeaveOnly(state, 1, "H2", "C2", "SA", "DA", "H3", "H8");
+            SetDiscardTop(state, "S5");
+            state.CurrentSeat = 0;
+            var cards = new[] { "S2", "H2", "D2", "C2", "CA", "SA", "HA", "DA", CardCatalog.IdJokerColor, "H3", CardCatalog.IdSpear };
+            var expectedLengths = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1 };
+            for (var i = 0; i < cards.Length; i++)
+            {
+                var seat = i % 2;
+                var events = runtime.Submit(CommandMessage.PlayCard(0, seat, IdInHand(state, seat, cards[i])), i + 1);
+                var played = FindEv(events, EvCode.CardPlayed);
+                Assert.That(played, Is.Not.Null, cards[i]);
+                Assert.That(played.defended, Is.EqualTo(i == 9), cards[i]);
+                Assert.That(played.attackChainLength, Is.EqualTo(expectedLengths[i]), cards[i]);
+            }
+        }
+
+        [Test]
         public void GiveCards_EmitsQueenGivenIds_DoesNotGrantFullHand()
         {
             var runtime = StartMatch();

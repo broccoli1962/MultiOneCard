@@ -148,7 +148,16 @@ namespace Backend.AddressableKey
             private static readonly Dictionary<string, string> Keys = new Dictionary<string, string>()
             {
                 { "AudioMixer", "Assets/GameResource/Sounds/AudioMixer.mixer" },
+                { "Attack_01", "Assets/GameResource/Sounds/Sfx/Attack_01.wav" },
+                { "Attack_02", "Assets/GameResource/Sounds/Sfx/Attack_02.wav" },
+                { "Attack_03", "Assets/GameResource/Sounds/Sfx/Attack_03.wav" },
+                { "Attack_04", "Assets/GameResource/Sounds/Sfx/Attack_04.wav" },
+                { "Attack_05", "Assets/GameResource/Sounds/Sfx/Attack_05.wav" },
+                { "Attack_06", "Assets/GameResource/Sounds/Sfx/Attack_06.wav" },
+                { "Attack_07", "Assets/GameResource/Sounds/Sfx/Attack_07.wav" },
+                { "Attack_08", "Assets/GameResource/Sounds/Sfx/Attack_08.wav" },
                 { "Card_Flip", "Assets/GameResource/Sounds/Sfx/Card_Flip.wav" },
+                { "Defend", "Assets/GameResource/Sounds/Sfx/Defend.wav" },
                 { "Turn_Chime", "Assets/GameResource/Sounds/Sfx/Turn_Chime.wav" },
             };
 
