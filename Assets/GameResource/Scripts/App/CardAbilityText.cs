@@ -70,7 +70,7 @@ namespace Backend.App
                 case Rank.Jack:
                     return "스킵. 다음 사람 한 명을 건너뜀.";
                 case Rank.Queen:
-                    return "리버스(방향 반전) 또는 기브(다음에게 손패 1장. 같은 문양 3·4로 막을 수 있음).";
+                    return "리버스(방향 반전) 또는 기브. 기브는 Q로 잇거나 같은 문양 3·4로 방어. 받으면 마지막 Q를 낸 사람이 누적 장수만큼 지급.";
                 case Rank.King:
                     return "엑스트라(합법 1장 더) 또는 하이드(한 장 숨김).";
                 default:

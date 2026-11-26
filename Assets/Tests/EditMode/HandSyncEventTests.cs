@@ -44,6 +44,33 @@ namespace Game.Rules.Tests
         }
 
         [Test]
+        public void ChainedQueenGive_AdvertisesStackAndSynchronizesBothCards()
+        {
+            var runtime = StartMatch();
+            var state = runtime.Match;
+            LeaveOnly(state, 0, "SQ", "S6");
+            LeaveOnly(state, 1, "HQ", "H6", "H7", "H8");
+            SetDiscardTop(state, "S5");
+            state.CurrentSeat = 0;
+            runtime.Submit(CommandMessage.PlayCard(0, 0, IdInHand(state, 0, "SQ")), 1);
+            var first = runtime.Submit(CommandMessage.ChooseQueenMode(0, 0, QueenModeName.Give), 2);
+            Assert.That(LegalHint.CanPlay(FindEv(first, EvCode.TurnChanged).match, "HQ"), Is.True);
+            runtime.Submit(CommandMessage.PlayCard(0, 1, IdInHand(state, 1, "HQ")), 3);
+            var second = runtime.Submit(CommandMessage.ChooseQueenMode(0, 1, QueenModeName.Give), 4);
+            Assert.That(FindEv(second, EvCode.TurnChanged).match.queenStack, Is.EqualTo(2));
+            runtime.Submit(CommandMessage.AcceptQueen(0, 0), 5);
+            var ids = new[] { IdInHand(state, 1, "H6"), IdInHand(state, 1, "H7") };
+            var events = runtime.Submit(CommandMessage.GiveCards(0, 1, ids), 6);
+            var given = FindEv(events, EvCode.QueenGiven);
+            Assert.That(given.fromSeat, Is.EqualTo(1));
+            Assert.That(given.toSeat, Is.EqualTo(0));
+            Assert.That(given.count, Is.EqualTo(2));
+            Assert.That(given.instanceIds, Is.EquivalentTo(ids));
+            var received = FindEv(MatchRuntime.EventsForSeat(events, 0), EvCode.CardsReceived);
+            Assert.That(received.instanceIds, Is.EquivalentTo(ids));
+        }
+
+        [Test]
         public void HideUnder_EmitsKingHiddenIds_DoesNotGrantFullHand()
         {
             var runtime = StartMatch();

@@ -9,7 +9,7 @@ namespace Game.Rules
         /// <summary>
         /// 이 장을 현재 버림 상태에 낼 수 있는지 판정한다.
         /// 공격 응답·알약 색 락·일반 매칭을 구분한다.
-        /// Q Give 응답(지급 고르기 전)은 같은 문양 3·4만. 지급 고르기 중은 낼 수 없다.
+        /// Q Give 응답(지급 고르기 전)은 Q 또는 같은 문양 3·4. 지급 고르기 중은 낼 수 없다.
         /// </summary>
         public static bool CanPlay(MatchState state, CardInstance card)
         {
@@ -182,9 +182,14 @@ namespace Game.Rules
                 attackDefendSuit);
         }
 
-        /// <summary>Q Give 응답: 낸 Q와 같은 문양 3·4만.</summary>
+        /// <summary>Q Give 응답: 모든 Q 또는 직전 Q와 같은 문양 3·4.</summary>
         private static bool CanPlayQueenResponse(CardDef card, CardDef discardTop)
         {
+            if (card.Rank == Rank.Queen)
+            {
+                return true;
+            }
+
             if (!IsThreeOrFour(card) || discardTop == null || discardTop.Suit == Suit.None)
             {
                 return false;

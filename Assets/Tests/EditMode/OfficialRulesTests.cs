@@ -567,7 +567,7 @@ namespace Game.Rules.Tests
 
             AssertRejected(RuleEngine.PlayCard(state, 0, givenId), RejectCode.NotYourTurn);
             AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "H3")), RejectCode.NotQueenResponse);
-            AssertRejected(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "HQ")), RejectCode.NotQueenResponse);
+            Assert.That(LegalMove.CanPlay(state, IdInHand(state, 1, "HQ")), Is.True);
             AssertRejected(RuleEngine.GiveCards(state, 0, new[] { givenId }), RejectCode.NeedGiveCards);
             AssertAccepted(RuleEngine.AcceptQueen(state, 1));
             Assert.That(state.PendingGiveSeat, Is.EqualTo(0));
@@ -581,6 +581,60 @@ namespace Game.Rules.Tests
             Assert.That(state.Hands[1].Count, Is.EqualTo(targetCount + 1));
             Assert.That(state.CurrentSeat, Is.EqualTo(1));
             Assert.That(state.CountAllCards(), Is.EqualTo(CardCatalog.OfficialInstanceCount));
+        }
+
+        [Test]
+        public void QueenGive_ThreeQueens_LastGiverTransfersThreeToNextSeat()
+        {
+            var state = Table(3);
+            LeaveOnly(state, 0, "SQ", "S6");
+            LeaveOnly(state, 1, "HQ", "H6");
+            LeaveOnly(state, 2, "CQ", "C5", "C6", "C7", "C8");
+            SetDiscardTop(state, "S5");
+
+            var queens = new[] { "SQ", "HQ", "CQ" };
+            for (var seat = 0; seat < queens.Length; seat++)
+            {
+                AssertAccepted(RuleEngine.PlayCard(state, seat, IdInHand(state, seat, queens[seat])));
+                AssertRejected(RuleEngine.AcceptQueen(state, seat), RejectCode.NotQueenResponse);
+                AssertAccepted(RuleEngine.ChooseQueenMode(state, seat, QueenMode.Give));
+                Assert.That(state.QueenStack, Is.EqualTo(seat + 1));
+            }
+
+            AssertAccepted(RuleEngine.AcceptQueen(state, 0));
+            var given = new[] { IdInHand(state, 2, "C5"), IdInHand(state, 2, "C6"), IdInHand(state, 2, "C7") };
+            AssertRejected(RuleEngine.GiveCards(state, 2, new[] { given[0] }), RejectCode.GiveCountMismatch);
+            AssertAccepted(RuleEngine.GiveCards(state, 2, given));
+            foreach (var id in given)
+            {
+                Assert.That(ContainsInstance(state.Hands[0], id), Is.True);
+            }
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+            Assert.That(state.QueenStack, Is.Zero);
+            state.EnsureInvariant();
+        }
+
+        [TestCase(QueenMode.Give)]
+        [TestCase(QueenMode.Reverse)]
+        public void QueenGive_ResponseQueen_CanBeDefendedOrReverseTheTurn(QueenMode mode)
+        {
+            var state = Table(3);
+            LeaveOnly(state, 0, "SQ", "S6");
+            LeaveOnly(state, 1, "HQ", "H6");
+            LeaveOnly(state, 2, "S3", "H4", "C6");
+            SetDiscardTop(state, "S5");
+            AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "SQ")));
+            AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Give));
+            AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "HQ")));
+            AssertAccepted(RuleEngine.ChooseQueenMode(state, 1, mode));
+            if (mode == QueenMode.Give)
+            {
+                AssertRejected(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "S3")), RejectCode.NotQueenResponse);
+                AssertAccepted(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "H4")));
+            }
+            Assert.That(state.CurrentSeat, Is.EqualTo(0));
+            Assert.That(state.QueenStack, Is.Zero);
+            Assert.That(state.QueenGiveTargetSeat, Is.Null);
         }
 
         [Test]

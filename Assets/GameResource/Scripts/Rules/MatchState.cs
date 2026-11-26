@@ -158,7 +158,7 @@ namespace Game.Rules
 
         public int QueenStack { get; set; }
 
-        /// <summary>마지막으로 Q를 낸 좌석. Give면 이 좌석이 1장을 지급한다.</summary>
+        /// <summary>마지막으로 Q를 낸 좌석. Give면 이 좌석이 누적 장수만큼 지급한다.</summary>
         public int? LastQueenSeat { get; set; }
 
         /// <summary>7 문양 지정을 기다리는 좌석.</summary>
@@ -167,7 +167,7 @@ namespace Game.Rules
         /// <summary>Q Reverse/Give 선택을 기다리는 좌석.</summary>
         public int? PendingQueenModeSeat { get; set; }
 
-        /// <summary>Q Give 후 1장을 고를 좌석(낸 사람). 대상이 감수하기 전에는 null.</summary>
+        /// <summary>Q Give 후 지급할 카드를 고를 좌석(낸 사람). 대상이 감수하기 전에는 null.</summary>
         public int? PendingGiveSeat { get; set; }
 
         /// <summary>Q 지급을 받을 다음 활성 좌석.</summary>

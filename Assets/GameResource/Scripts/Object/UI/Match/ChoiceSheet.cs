@@ -89,7 +89,7 @@ namespace Backend.Object.UI
         /// <summary>
         /// 호스트가 요구한 시트만 보여 준다. 시간 초과는 화면이 판결하지 않는다.
         /// </summary>
-        public void Apply(MatchPrompt prompt)
+        public void Apply(MatchPrompt prompt, int queenStack = 0, int handCount = 0)
         {
             EnsureLayout();
 
@@ -108,7 +108,7 @@ namespace Backend.Object.UI
 
             if (_title != null)
             {
-                _title.text = TitleFor(prompt);
+                _title.text = TitleFor(prompt, queenStack, handCount);
             }
             SetActive(_suitGrid, prompt == MatchPrompt.Suit);
             if (prompt == MatchPrompt.Suit)
@@ -305,18 +305,18 @@ namespace Backend.Object.UI
             }
         }
 
-        private static string TitleFor(MatchPrompt prompt)
+        private static string TitleFor(MatchPrompt prompt, int queenStack, int handCount)
         {
             switch (prompt)
             {
                 case MatchPrompt.Suit:
                     return "무늬 고르기";
                 case MatchPrompt.QueenMode:
-                    return "Q 고르기";
+                    return $"Q 효과 선택 · 지급 시 {queenStack + 1}장";
                 case MatchPrompt.KingMode:
                     return "K 고르기";
                 case MatchPrompt.GiveCards:
-                    return "지급할 장";
+                    return $"건넬 카드 {Mathf.Min(handCount, queenStack)}장 선택";
                 case MatchPrompt.HideUnder:
                     return "숨길 장";
                 case MatchPrompt.MirrorDiscard:

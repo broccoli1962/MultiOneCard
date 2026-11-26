@@ -7,10 +7,10 @@ namespace Game.Rules
     /// Official 수 엔진. PlayCard / DrawCard / MirrorDiscard /
     /// ChooseSuit / ChooseQueenMode / AcceptQueen / GiveCards / ChooseKingMode / HideUnder /
     /// ApplyTimeout / Surrender / ComputeStandings.
-    /// 랭크 특수: 7 문양, J 스킵, Q Reverse·Give(같은 문양 3·4로 방어 가능, 감수 후 1장 지급), K Extra·Hide(숨김은 공개 제외).
+    /// 랭크 특수: 7 문양, J 스킵, Q Reverse·Give(같은 문양 3·4로 방어 가능, Q로 누적, 감수 후 누적 장수 지급), K Extra·Hide(숨김은 공개 제외).
     /// 공격: 2·A는 같은 랭크(색 무관) 또는 같은 문양으로 이어가기, 조커 위 2·A는 색 일치. 조커 위 조커는 색 무관.
     /// 패스·역날검으로 덮이면 2·A·조커·3·4는 색·랭크 무관. 죽창 top은 3·4 불가.
-    /// 초과: 일반 드로우1, 공격 스택, Q Reverse/점수순 1장 지급, K만/낮은 점수 숨김, 7 원래 무늬, 미러 높은 점수.
+    /// 초과: 일반 드로우1, 공격 스택, Q Reverse/점수순 누적 장수 지급, K만/낮은 점수 숨김, 7 원래 무늬, 미러 높은 점수.
     /// 연속 타임아웃 3회=기권. 손패 20장 이상=파산(기권과 동일). 점프·리버스는 활성 좌석만 센다.
     /// </summary>
     public static class RuleEngine
@@ -260,7 +260,7 @@ namespace Game.Rules
 
         /// <summary>
         /// Q 모드. Reverse=방향 반전 후 다음 활성.
-        /// Give=다음 활성이 같은 문양 3·4로 막거나, 감수 후 낸 사람이 손패 1장을 지급한다.
+        /// Give=다음 좌석이 Q로 잇거나 같은 문양 3·4로 방어한다. 감수하면 누적 Q 수만큼 지급한다.
         /// </summary>
         public static RuleResult ChooseQueenMode(MatchState state, int seat, QueenMode mode)
         {
@@ -282,7 +282,7 @@ namespace Game.Rules
             state.PendingQueenModeSeat = null;
             if (mode == QueenMode.Give)
             {
-                state.QueenStack = 1;
+                state.QueenStack++;
                 state.LastQueenSeat = seat;
                 state.PendingGiveSeat = null;
                 state.QueenGiveTargetSeat = NextSeat(state, seat);
@@ -291,6 +291,7 @@ namespace Game.Rules
             }
             else
             {
+                ClearQueenChain(state);
                 ApplyQueenReverse(state);
             }
 
@@ -299,7 +300,7 @@ namespace Game.Rules
         }
 
         /// <summary>
-        /// Q Give 감수. 대상이 받으면 낸 사람이 손패 1장을 고른다.
+        /// Q Give 감수. 대상이 받으면 마지막 Q를 낸 사람이 누적 장수만큼 고른다.
         /// </summary>
         public static RuleResult AcceptQueen(MatchState state, int seat)
         {
@@ -329,7 +330,7 @@ namespace Game.Rules
         }
 
         /// <summary>
-        /// Q를 낸 좌석이 손패 1장을 다음 활성에게 준다. 부족분은 덱에서 채운다.
+        /// Q를 낸 좌석이 누적 장수만큼 다음 활성에게 준다. 부족분은 덱에서 채운다.
         /// 지급 후 손패 0이면 1위. 아니면 받은 좌석 턴.
         /// </summary>
         public static RuleResult GiveCards(MatchState state, int seat, IReadOnlyList<int> instanceIds)
@@ -830,6 +831,7 @@ namespace Game.Rules
             if (card.Rank == Rank.Queen)
             {
                 state.LastQueenSeat = seat;
+                state.QueenGiveTargetSeat = null;
                 state.PendingQueenModeSeat = seat;
                 return true;
             }

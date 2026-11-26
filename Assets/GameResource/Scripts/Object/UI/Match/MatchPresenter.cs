@@ -1349,7 +1349,7 @@ namespace Backend.Object.UI
             if (match.queenStack > 0 && match.pendingGive && IsActingSeat(match))
             {
                 _prompt = MatchPrompt.GiveCards;
-                _status = "지급할 장 1장";
+                _status = $"지급할 카드 {match.queenStack}장";
                 return;
             }
 

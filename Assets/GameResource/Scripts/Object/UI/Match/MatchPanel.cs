@@ -393,7 +393,7 @@ namespace Backend.Object.UI
             RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
             BindPreview(handIds, handDefs, selectedIds, hoverPreviewId);
             BindTurnNick(match, nicks);
-            ShowPrompt(prompt);
+            ShowPrompt(prompt, match?.queenStack ?? 0, handIds?.Count ?? 0);
             SetAcceptLabel(match, prompt);
             SetInputLocked(inputLocked);
         }
@@ -866,11 +866,11 @@ namespace Backend.Object.UI
             ConfirmClicked?.Invoke();
         }
 
-        private void ShowPrompt(MatchPrompt prompt)
+        private void ShowPrompt(MatchPrompt prompt, int queenStack = 0, int handCount = 0)
         {
             if (_choiceSheet != null)
             {
-                _choiceSheet.Apply(prompt);
+                _choiceSheet.Apply(prompt, queenStack, handCount);
             }
         }
 
