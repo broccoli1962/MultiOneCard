@@ -116,5 +116,4 @@ runtime/
 # local agent / test output
 .cursor/gssl-result.json
 .cursor/gssl-pending.json
-.cursor/rules/.git-workflow-sync.json
 Assets/Tests/EditMode/TestResults.*
