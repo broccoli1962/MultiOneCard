@@ -29,6 +29,8 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _backButton;
         [SerializeField] private CommonButton[] _slotButtons = new CommonButton[MAX_SLOTS];
         [SerializeField] private TextMeshProUGUI[] _slotTexts = new TextMeshProUGUI[MAX_SLOTS];
+        [SerializeField] private TextMeshProUGUI[] _seatRoles = new TextMeshProUGUI[MAX_SLOTS];
+        [SerializeField] private TextMeshProUGUI[] _readyStates = new TextMeshProUGUI[MAX_SLOTS];
 
         private bool _layoutReady;
 
@@ -197,13 +199,13 @@ namespace Backend.Object.UI
                     continue;
                 }
 
-                var nick = room != null && room.nicks != null && i < room.nicks.Length && !string.IsNullOrEmpty(room.nicks[i])
-                    ? room.nicks[i]
-                    : "빈 자리";
+                var nick = room?.nicks != null && i < room.nicks.Length ? room.nicks[i] : null;
+                var occupied = !string.IsNullOrEmpty(nick);
                 var ready = room != null && room.ready != null && i < room.ready.Length && room.ready[i];
-                var host = room != null && i == room.hostSeat;
-                var mine = i == localSeat;
-                slotText.text = $"좌석{i + 1}  {nick}  {(ready ? "준비" : "대기")}{(host ? " 방장" : string.Empty)}{(mine ? " 나" : string.Empty)}";
+                var host = occupied && i == room.hostSeat;
+                slotText.text = occupied ? nick : "빈 자리";
+                _seatRoles[i].text = $"좌석 {i + 1}{(host ? " · 방장" : string.Empty)}{(occupied && i == localSeat ? " · 나" : string.Empty)}";
+                _readyStates[i].text = occupied ? (ready ? "준비 완료" : "준비 대기") : string.Empty;
                 var hostIcon = button != null ? button.CachedTransform.Find("HostIcon") : null;
                 if (hostIcon != null)
                 {
