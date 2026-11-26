@@ -29,6 +29,7 @@ namespace Backend.Object.UI
         private bool _remote;
         private int _localSeat;
         private int _lastTurnSeat = -1;
+        private int _lastCardSoundSeq = int.MinValue;
         private int _seatCount = DUMMY_SEAT_COUNT;
         private GamePointerInput _pointerInput;
         private int _viewSeat;
@@ -351,6 +352,7 @@ namespace Backend.Object.UI
         private void ResetTableUi(string status)
         {
             _lastTurnSeat = -1;
+            _lastCardSoundSeq = int.MinValue;
             _viewSeat = 0;
             _prompt = MatchPrompt.None;
             _status = status;
@@ -448,6 +450,12 @@ namespace Backend.Object.UI
 
             if (ev.ev == EvCode.CardPlayed)
             {
+                if (ev.seq > _lastCardSoundSeq && (!_remote || ev.seat != _localSeat))
+                {
+                    _lastCardSoundSeq = ev.seq;
+                    AudioManager.PlaySfx("Card_Place");
+                }
+
                 _lastPlayedDefId = ev.defId;
                 RememberAct(ev.seat, NickOf(ev.seat) + "이 " + (string.IsNullOrEmpty(ev.defId) ? "?" : ev.defId) + " 냄");
             }
