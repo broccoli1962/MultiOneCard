@@ -68,6 +68,8 @@ namespace Game.Rules.Tests
             Assert.That(given.count, Is.EqualTo(2));
             Assert.That(given.instanceIds, Is.EquivalentTo(ids));
             var received = FindEv(MatchRuntime.EventsForSeat(events, 0), EvCode.CardsReceived);
+            Assert.That(received.seat, Is.EqualTo(0));
+            Assert.That(received.fromSeat, Is.EqualTo(1));
             Assert.That(received.instanceIds, Is.EquivalentTo(ids));
         }
 

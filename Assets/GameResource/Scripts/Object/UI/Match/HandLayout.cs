@@ -41,7 +41,6 @@ namespace Backend.Object.UI
         [SerializeField] private TMP_FontAsset _font;
         [SerializeField] private RectTransform _drawOrigin;
 
-        private RectTransform _travelOrigin;
         private CardView _dragCard;
         private CardView _hoverCard;
         private IReadOnlyCollection<int> _selectedIds;
@@ -100,18 +99,10 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 다음 신규 손패의 출발점을 덱 대신 이 트랜스폼으로 쓴다. 신규 장이 있을 때 한 번만 쓴다.
-        /// </summary>
-        public void ArmTravelOrigin(RectTransform origin)
-        {
-            _travelOrigin = origin;
-        }
-
-        /// <summary>
         /// 손패를 깔고 합법/선택 시각을 적용한다. 같은 장이면 풀을 다시 쓰지 않는다.
         /// legalFlags 가 null 이면 모두 선택 가능(지급·미러·숨김).
         /// dragToPlay 면 테이블로 끌어 확정한다(내기·지급·숨김·미러).
-        /// 기존 손패와 겹치는 장이 하나도 없으면(좌석 전환) 덱 드로우 연출을 쓰지 않는다.
+        /// 좌석 전환 시 손패를 즉시 배치하고, Q 지급은 수신 이벤트에 포함된 카드만 이동한다.
         /// </summary>
         public void Render(
             IReadOnlyList<int> handIds,
@@ -119,7 +110,10 @@ namespace Backend.Object.UI
             IReadOnlyCollection<int> selectedIds,
             IReadOnlyList<bool> legalFlags,
             bool interactable,
-            bool dragToPlay)
+            bool dragToPlay,
+            bool seatChanged = false,
+            IReadOnlyCollection<int> receivedIds = null,
+            RectTransform receiveOrigin = null)
         {
             _dragToPlay = dragToPlay;
             _inputEnabled = interactable;
@@ -133,7 +127,7 @@ namespace Backend.Object.UI
 
             if (_dragCard != null)
             {
-                if (SameHand(handIds))
+                if (receivedIds == null && SameHand(handIds))
                 {
                     return;
                 }
@@ -141,13 +135,13 @@ namespace Backend.Object.UI
                 CancelDrag();
             }
 
-            if (SameHand(handIds))
+            if (receivedIds == null && SameHand(handIds))
             {
                 ApplyState(handIds, handDefs, selectedIds, legalFlags);
                 return;
             }
 
-            Sync(handIds, handDefs, selectedIds, legalFlags);
+            Sync(handIds, handDefs, selectedIds, legalFlags, seatChanged, receivedIds, receiveOrigin);
         }
 
         /// <summary>
@@ -174,7 +168,6 @@ namespace Backend.Object.UI
             CancelDrag();
             _hoverCard = null;
             _selectedIds = null;
-            _travelOrigin = null;
             for (var i = 0; i < _cards.Count; i++)
             {
                 var card = _cards[i];
@@ -199,7 +192,10 @@ namespace Backend.Object.UI
             IReadOnlyList<int> handIds,
             IReadOnlyList<string> handDefs,
             IReadOnlyCollection<int> selectedIds,
-            IReadOnlyList<bool> legalFlags)
+            IReadOnlyList<bool> legalFlags,
+            bool seatChanged,
+            IReadOnlyCollection<int> receivedIds,
+            RectTransform receiveOrigin)
         {
             CancelTravel();
             var previousCount = _cards.Count;
@@ -221,28 +217,31 @@ namespace Backend.Object.UI
             for (var i = 0; i < handIds.Count; i++)
             {
                 var id = handIds[i];
-                if (_byIdScratch.TryGetValue(id, out var kept))
+                var kept = _byIdScratch.TryGetValue(id, out var card);
+                if (kept)
                 {
                     _byIdScratch.Remove(id);
-                    next.Add(kept);
-                    continue;
+                }
+                else
+                {
+                    card = SpawnCard(i);
                 }
 
-                var spawned = SpawnCard(i);
-                if (spawned == null)
+                if (card == null)
                 {
                     continue;
                 }
 
-                next.Add(spawned);
-                _drawnScratch.Add(spawned);
+                next.Add(card);
+                if (receivedIds != null ? ContainsId(receivedIds, id) : !kept)
+                {
+                    _drawnScratch.Add(card);
+                }
             }
 
-            var keptCount = next.Count - _drawnScratch.Count;
-            if (previousCount > 0 && keptCount == 0 && _drawnScratch.Count > 0)
+            if (receivedIds == null && previousCount > 0 && (seatChanged || next.Count == _drawnScratch.Count))
             {
                 _drawnScratch.Clear();
-                _travelOrigin = null;
             }
 
             for (var i = 0; i < _cards.Count; i++)
@@ -265,9 +264,10 @@ namespace Backend.Object.UI
             var animateDraws = _drawnScratch.Count > 0;
             if (animateDraws)
             {
-                for (var i = 0; i < _cards.Count; i++)
+                var moving = receivedIds == null ? _cards : _drawnScratch;
+                for (var i = 0; i < moving.Count; i++)
                 {
-                    _cards[i].SetTraveling(true);
+                    moving[i].SetTraveling(true);
                 }
             }
 
@@ -277,7 +277,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var origin = ResolveTravelAnchored(true);
+            var origin = AnchoredFromVisual(receiveOrigin != null ? receiveOrigin : _drawOrigin);
             for (var i = 0; i < _drawnScratch.Count; i++)
             {
                 var card = _drawnScratch[i];
@@ -659,7 +659,7 @@ namespace Backend.Object.UI
                 for (var i = 0; i < _cards.Count; i++)
                 {
                     var card = _cards[i];
-                    if (card == null || ContainsCard(drawn, card))
+                    if (card == null || !card.IsTraveling || ContainsCard(drawn, card))
                     {
                         continue;
                     }
@@ -843,17 +843,6 @@ namespace Backend.Object.UI
 
                 throw;
             }
-        }
-
-        private Vector2 ResolveTravelAnchored(bool consumeArmed)
-        {
-            var visual = consumeArmed && _travelOrigin != null ? _travelOrigin : _drawOrigin;
-            if (consumeArmed)
-            {
-                _travelOrigin = null;
-            }
-
-            return AnchoredFromVisual(visual);
         }
 
         private Vector2 AnchoredFromVisual(RectTransform visual)

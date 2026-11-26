@@ -51,7 +51,6 @@ namespace Backend.Object.UI
         private bool _chatVisible;
         private int _lastChatSeq = int.MinValue;
         private int _hoverPreviewId = -1;
-        private bool _queenReceiveTravelArmed;
 
         /// <summary>
         /// 대기실 루프백을 테이블에 넘긴다. Open 전에 호출한다.
@@ -371,7 +370,6 @@ namespace Backend.Object.UI
             _mirrorTarget = 0;
             _lastSentOp = null;
             _lastPlayedDefId = null;
-            _queenReceiveTravelArmed = false;
         }
 
         private void NotifyTurn(PublicMatchView match)
@@ -585,37 +583,14 @@ namespace Backend.Object.UI
                 return;
             }
 
-            var viewing = _remote ? _localSeat : _viewSeat;
-            if (ev.ev == EvCode.CardsReceived)
+            if (ev.ev == EvCode.CardsReceived && ev.fromSeat >= 0)
             {
-                var match = AnyPublicMatch();
-                if (match != null && match.pendingGive)
-                {
-                    View.ArmQueenReceive(match.currentSeat);
-                    _queenReceiveTravelArmed = true;
-                }
-
-                return;
+                View.ArmQueenReceive(ev.seat, ev.fromSeat, ev.instanceIds);
             }
-
-            if (ev.ev != EvCode.QueenGiven)
-            {
-                return;
-            }
-
-            if (viewing == ev.toSeat)
-            {
-                if (!_queenReceiveTravelArmed)
-                {
-                    View.ArmQueenReceive(ev.fromSeat);
-                }
-            }
-            else
+            else if (ev.ev == EvCode.QueenGiven && _remote && _localSeat != ev.toSeat)
             {
                 View.PlayQueenGiveFlight(ev.fromSeat, ev.toSeat, ev.count, ev.seq);
             }
-
-            _queenReceiveTravelArmed = false;
         }
 
         private void RememberSuitChanged(EventMessage ev)

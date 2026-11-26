@@ -850,7 +850,7 @@ namespace Backend.App
 
                 if (fromSeats.Count > 0)
                 {
-                    EmitCardsReceived(seat, fromSeats);
+                    EmitCardsReceived(seat, before.PendingGive, fromSeats);
                 }
             }
 
@@ -960,9 +960,10 @@ namespace Backend.App
             FillPrivateIds(ev, instanceIds);
         }
 
-        private void EmitCardsReceived(int seat, List<int> instanceIds)
+        private void EmitCardsReceived(int seat, int fromSeat, List<int> instanceIds)
         {
             var ev = Ev(EvCode.CardsReceived, seat);
+            ev.fromSeat = fromSeat;
             FillPrivateIds(ev, instanceIds);
         }
 

@@ -54,6 +54,9 @@ namespace Backend.Object.UI
         private bool _layoutReady;
         private int _seatCount = 2;
         private int _viewingSeat;
+        private int _receiveSeat;
+        private int _receiveFrom;
+        private int[] _receivedIds;
         private Canvas _canvas;
         private CancellationTokenSource _flightCts;
         private int _lastQueenFlightSeq = int.MinValue;
@@ -346,6 +349,7 @@ namespace Backend.Object.UI
         {
             EnsureLayout();
             _ = status;
+            var seatChanged = _viewingSeat != viewingSeat;
             _viewingSeat = viewingSeat;
             _seatCount = match != null && match.handCounts != null && match.handCounts.Length >= 2
                 ? match.handCounts.Length
@@ -390,7 +394,7 @@ namespace Backend.Object.UI
                 BindOpponents(match, viewingSeat, lastActSeat, nicks);
             }
 
-            RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked);
+            RenderHand(handIds, handDefs, selectedIds, legalFlags, prompt, inputLocked, seatChanged);
             BindPreview(handIds, handDefs, selectedIds, hoverPreviewId);
             BindTurnNick(match, nicks);
             ShowPrompt(prompt, match?.queenStack ?? 0, handIds?.Count ?? 0);
@@ -421,6 +425,7 @@ namespace Backend.Object.UI
         /// </summary>
         public void ReleaseHand()
         {
+            _receivedIds = null;
             CancelQueenFlights();
             if (_suitAnnounce != null)
             {
@@ -438,15 +443,11 @@ namespace Backend.Object.UI
         /// <summary>
         /// Q 지급으로 들어오는 손패를 덱이 아니라 fromSeat 위치에서 출발시킨다.
         /// </summary>
-        public void ArmQueenReceive(int fromSeat)
+        public void ArmQueenReceive(int seat, int fromSeat, int[] ids)
         {
-            EnsureLayout();
-            if (_handLayout == null)
-            {
-                return;
-            }
-
-            _handLayout.ArmTravelOrigin(SeatVisual(fromSeat));
+            _receiveSeat = seat;
+            _receiveFrom = fromSeat;
+            _receivedIds = ids;
         }
 
         /// <summary>
@@ -610,7 +611,7 @@ namespace Backend.Object.UI
             IReadOnlyCollection<int> selectedIds,
             IReadOnlyList<bool> legalFlags,
             MatchPrompt prompt,
-            bool inputLocked)
+            bool inputLocked, bool seatChanged)
         {
             if (_handLayout == null)
             {
@@ -626,13 +627,22 @@ namespace Backend.Object.UI
                 || prompt == MatchPrompt.GiveCards
                 || prompt == MatchPrompt.HideUnder
                 || prompt == MatchPrompt.MirrorDiscard;
+            var received = _viewingSeat == _receiveSeat ? _receivedIds : null;
+            if (received != null)
+            {
+                _receivedIds = null;
+            }
+
             _handLayout.Render(
                 handIds,
                 handDefs,
                 selectedIds,
                 legalFlags,
                 cardsSelectable,
-                dragEnabled);
+                dragEnabled,
+                seatChanged,
+                received,
+                received != null ? SeatVisual(_receiveFrom) : null);
         }
 
         private void BindPreview(
