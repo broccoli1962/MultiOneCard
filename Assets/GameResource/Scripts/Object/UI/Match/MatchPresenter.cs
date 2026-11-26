@@ -28,6 +28,7 @@ namespace Backend.Object.UI
         private NetClient[] _clients;
         private bool _remote;
         private int _localSeat;
+        private int _lastTurnSeat = -1;
         private int _seatCount = DUMMY_SEAT_COUNT;
         private GamePointerInput _pointerInput;
         private int _viewSeat;
@@ -244,6 +245,7 @@ namespace Backend.Object.UI
             _localSeat = 0;
             BindClients();
             ResetTableUi("시작");
+            NotifyTurn(AnyPublicMatch());
             ReplayChat();
             Refresh();
         }
@@ -273,6 +275,7 @@ namespace Backend.Object.UI
             BindClients();
             ResetTableUi("시작");
             _viewSeat = _localSeat;
+            NotifyTurn(match);
             ReplayChat();
             Refresh();
         }
@@ -347,6 +350,7 @@ namespace Backend.Object.UI
 
         private void ResetTableUi(string status)
         {
+            _lastTurnSeat = -1;
             _viewSeat = 0;
             _prompt = MatchPrompt.None;
             _status = status;
@@ -366,6 +370,20 @@ namespace Backend.Object.UI
             _lastSentOp = null;
             _lastPlayedDefId = null;
             _queenReceiveTravelArmed = false;
+        }
+
+        private void NotifyTurn(PublicMatchView match)
+        {
+            if (match == null || match.currentSeat < 0 || match.currentSeat == _lastTurnSeat)
+            {
+                return;
+            }
+
+            _lastTurnSeat = match.currentSeat;
+            if (!_remote || _lastTurnSeat == _localSeat)
+            {
+                AudioManager.PlaySfx("Turn_Chime");
+            }
         }
 
         private void StopHotseat(bool disconnect = true)
@@ -468,6 +486,11 @@ namespace Backend.Object.UI
                 _result = null;
                 _status = "종료";
                 OpenResult(ev);
+            }
+
+            if (ev.ev == EvCode.TurnChanged && !_resultOpened)
+            {
+                NotifyTurn(ev.match);
             }
 
             InferPrompt(ev);

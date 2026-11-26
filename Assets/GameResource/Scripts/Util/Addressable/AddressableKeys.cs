@@ -149,6 +149,7 @@ namespace Backend.AddressableKey
             {
                 { "AudioMixer", "Assets/GameResource/Sounds/AudioMixer.mixer" },
                 { "Card_Flip", "Assets/GameResource/Sounds/Sfx/Card_Flip.wav" },
+                { "Turn_Chime", "Assets/GameResource/Sounds/Sfx/Turn_Chime.wav" },
             };
 
             public static string Get<T>() => Keys.TryGetValue(typeof(T).Name, out var key) ? key : null;
