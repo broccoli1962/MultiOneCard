@@ -453,7 +453,7 @@ namespace Backend.Object.UI
                 if (ev.seq > _lastCardSoundSeq && (!_remote || ev.seat != _localSeat))
                 {
                     _lastCardSoundSeq = ev.seq;
-                    AudioManager.PlaySfx("Card_Place");
+                    AudioManager.PlaySfx(HandLayout.DrawSfxKey);
                 }
 
                 _lastPlayedDefId = ev.defId;
