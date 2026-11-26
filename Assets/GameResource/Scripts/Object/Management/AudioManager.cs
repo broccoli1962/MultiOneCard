@@ -451,7 +451,7 @@ namespace Backend.Object.Management
         #region Static Public Methods
 
         /// <summary>
-        /// AudioMixer 에셋을 로드하고 BGM/SFX 그룹을 초기화합니다. Boot 초기화 시 1회 호출됩니다.
+        /// AudioMixer 에셋을 로드하고 BGM/SFX 그룹을 초기화합니다. AppFlow 초기화 시 1회 호출됩니다.
         /// </summary>
         public static UniTask InitMixer() => Instance.InitMixer_InternalAsync();
 

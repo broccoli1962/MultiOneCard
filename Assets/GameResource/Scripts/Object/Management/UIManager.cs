@@ -38,7 +38,8 @@ namespace Backend.Object.Management
 
         private UniTaskCompletionSource _registryReady;
 
-        private readonly Dictionary<Type, UIBase> _active = new();
+        private readonly Dictionary<UIBase, UniTaskCompletionSource> _closing = new();
+        private int _navigationVersion;
         private readonly Dictionary<UIBase, UILifecycle> _lifecycles = new();
         private readonly Stack<UIBase> _backStack = new();
         private readonly Subject<Unit> _onBackEmpty = new();
@@ -63,22 +64,21 @@ namespace Backend.Object.Management
 
         private async UniTaskVoid InitRegistryAsync()
         {
-            var prefab = await ResourceManager.LoadResourceAsync<GameObject>(AddressableKeys.UI.Get("UIRoot"));
-            if (prefab == null)
+            try
             {
-                Debug.LogError("[UIManager] UIRoot 프리팹 로드 실패. _registry 없이 동작합니다.");
+                var prefab = await ResourceManager.LoadResourceAsync<GameObject>(AddressableKeys.UI.Get("UIRoot"));
+                if (prefab == null || !prefab.TryGetComponent<UIRegistry>(out _))
+                    throw new InvalidOperationException("UIRoot prefab must contain a UIRegistry.");
+
+                var go = Instantiate(prefab);
+                DontDestroyOnLoad(go);
+                _registry = go.GetComponent<UIRegistry>();
                 _registryReady.TrySetResult();
-                return;
             }
-
-            var go = Instantiate(prefab);
-            DontDestroyOnLoad(go);
-            _registry = go.GetComponent<UIRegistry>();
-
-            if (_registry == null)
-                Debug.LogError("[UIManager] UIRoot 프리팹에 UIRegistry 컴포넌트가 없습니다.");
-
-            _registryReady.TrySetResult();
+            catch (Exception error)
+            {
+                _registryReady.TrySetException(error);
+            }
         }
 
         private void OnDestroy()
@@ -117,31 +117,21 @@ namespace Backend.Object.Management
         /// </summary>
         private async UniTask<T> OpenAsync_Internal<T>(string addressableKey) where T : UIBase
         {
+            var version = _navigationVersion;
+            await PreloadAsync_Internal<T>(addressableKey);
+            return version == _navigationVersion ? Open_Internal<T>() : null;
+        }
+
+        private async UniTask PreloadAsync_Internal<T>(string addressableKey) where T : UIBase
+        {
             await _registryReady.Task;
+            if (ObjectPoolManager.HasPool<T>()) return;
 
-            if (!ObjectPoolManager.HasPool<T>())
-            {
-                var key = addressableKey ?? AddressableKeys.UI.Get<T>();
-                if (string.IsNullOrEmpty(key))
-                {
-                    Debug.LogError($"[UIManager] Addressable key for {typeof(T).Name} is empty.");
-                    return null;
-                }
-
-                var pool = await ObjectPoolManager.GetOrCreatePoolAsync<T>(
-                    addressableKey: key,
-                    parent: null,
-                    onGet: instance => Reparent(instance),
-                    onRelease: null);
-
-                if (pool == null)
-                {
-                    Debug.LogError($"[UIManager] Failed to create pool for {typeof(T).Name} (key={key}).");
-                    return null;
-                }
-            }
-
-            return Open_Internal<T>();
+            var key = addressableKey ?? AddressableKeys.UI.Get<T>();
+            var pool = await ObjectPoolManager.GetOrCreatePoolAsync<T>(
+                addressableKey: key, parent: _registry.transform, onGet: Reparent);
+            if (pool == null)
+                throw new InvalidOperationException($"Could not preload {typeof(T).Name} ({key}).");
         }
 
         #endregion
@@ -160,28 +150,34 @@ namespace Backend.Object.Management
             RunCloseAsync(ui, releasePool: true).Forget();
         }
 
-        private async UniTaskVoid RunCloseAsync(UIBase target, bool releasePool)
+        private async UniTask RunCloseAsync(UIBase target, bool releasePool)
         {
-            if (target == null) return;
-
-            await target.CloseAsync();
-
-            _active.Remove(target.GetType());
-            RemoveFromBackStack(target);
-
-            if (_lifecycles.TryGetValue(target, out var lifecycle))
+            if (target == null || !_lifecycles.TryGetValue(target, out var lifecycle)) return;
+            if (_closing.TryGetValue(target, out var pending))
             {
-                _lifecycles.Remove(target);
-                lifecycle.Release?.Invoke();
-                if (releasePool)
-                {
-                    lifecycle.ReleasePool?.Invoke();
-                }
+                await pending.Task;
+                return;
             }
-            else
+
+            var completion = new UniTaskCompletionSource();
+            _closing.Add(target, completion);
+            try
             {
-                Debug.LogWarning($"[UIManager] Lifecycle missing for {target.GetType().Name}. Falling back to deactivate.");
-                target.gameObject.SetActive(false);
+                await target.CloseAsync();
+                RemoveFromBackStack(target);
+                _lifecycles.Remove(target);
+                lifecycle.Release();
+                if (releasePool) lifecycle.ReleasePool();
+                completion.TrySetResult();
+            }
+            catch (Exception error)
+            {
+                completion.TrySetException(error);
+                throw;
+            }
+            finally
+            {
+                _closing.Remove(target);
             }
         }
 
@@ -257,7 +253,6 @@ namespace Backend.Object.Management
         private void Activate(UIBase ui)
         {
             Reparent(ui);
-            _active[ui.GetType()] = ui;
 
             if (ui.HandleBackButton)
             {
@@ -331,15 +326,16 @@ namespace Backend.Object.Management
             if (_blockerRoot != null) _blockerRoot.SetActive(false);
         }
 
-        private void CloseAllUI_Internal()
+        private async UniTask CloseAllUI_Internal()
         {
+            ++_navigationVersion;
             var snapshot = ListPool<UIBase>.Get();
             try
             {
-                snapshot.AddRange(_active.Values);
+                snapshot.AddRange(_lifecycles.Keys);
                 foreach (var ui in snapshot)
                 {
-                    Close_Internal(ui);
+                    await RunCloseAsync(ui, releasePool: false);
                 }
             }
             finally
@@ -354,6 +350,10 @@ namespace Backend.Object.Management
         #endregion
 
         #region Static Public Methods
+
+        /// <summary>화면을 열지 않고 UI 프리팹의 풀을 준비한다.</summary>
+        public static UniTask PreloadAsync<T>(string addressableKey = null) where T : UIBase
+            => Instance.PreloadAsync_Internal<T>(addressableKey);
 
         /// <summary>
         /// 풀이 이미 만들어져 있는 UI 를 동기로 오픈한다.
@@ -402,7 +402,10 @@ namespace Backend.Object.Management
         /// 현재 활성화된 모든 UI 를 닫고 백 스택과 블로커를 정리한다.
         /// </summary>
         public static void CloseAllUI()
-            => Instance.CloseAllUI_Internal();
+            => Instance.CloseAllUI_Internal().Forget();
+
+        /// <summary>화면의 종료 처리와 풀 반환이 끝날 때까지 기다린다.</summary>
+        public static UniTask CloseAllUIAsync() => Instance.CloseAllUI_Internal();
 
         #endregion
     }

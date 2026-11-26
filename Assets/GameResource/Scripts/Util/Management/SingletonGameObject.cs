@@ -18,13 +18,14 @@ namespace Backend.Util.Management
 
         protected sealed override void Awake()
         {
-            if (_instance is null)
+            if (_instance == null)
             {
                 _instance = this as T;
             }
             else if (_instance != this)
             {
                 Destroy(gameObject);
+                return;
             }
 
             base.Awake();
@@ -41,7 +42,7 @@ namespace Backend.Util.Management
                     return null;
                 }
 
-                if (_instance is null == false)
+                if (_instance != null)
                 {
                     return _instance;
                 }

@@ -39,7 +39,7 @@ namespace Backend.Object.UI
 
         private void OnStartClicked()
         {
-            UIManager.OpenAsync<LobbyPanel>().Forget();
+            AppFlow.LoadSceneAsync(SceneId.GameScene).Forget();
         }
 
         private void OnSettingsClicked()

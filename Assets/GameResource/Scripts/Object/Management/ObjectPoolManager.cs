@@ -218,18 +218,24 @@ namespace Backend.Object.Management
             namedPools.Remove(name);
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSession()
+        {
+            // Pools retain callbacks and Unity objects from the previous Play session.
+            pools.Clear();
+            clearablePools.Clear();
+            namedPools.Clear();
+            namedClearablePools.Clear();
+            loadingTypes.Clear();
+            loadingNames.Clear();
+        }
+
         public static void ReleaseAllPools()
         {
             foreach (var disposable in clearablePools.Values) disposable.Dispose();
             foreach (var disposable in namedClearablePools.Values) disposable.Dispose();
 
-            pools.Clear();
-            clearablePools.Clear();
-            namedPools.Clear();
-            namedClearablePools.Clear();
-
-            loadingTypes.Clear();
-            loadingNames.Clear();
+            ResetSession();
         }
 
         public static void ClearAllInactivePools()

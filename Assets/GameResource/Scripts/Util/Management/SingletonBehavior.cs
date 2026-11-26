@@ -15,6 +15,9 @@ namespace Backend.Util.Management
         // So to prevent this, we add a flag to check if the singleton object is being removed.
         protected static bool IsQuitting;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSession() => IsQuitting = false;
+
         protected virtual void Awake()
         {
             if (isPersistent)
@@ -35,12 +38,7 @@ namespace Backend.Util.Management
 
         private void OnDestroy()
         {
-            IsQuitting = true;
-
-            if (isPersistent)
-            {
-                UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
-            }
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
         private void OnApplicationQuit()

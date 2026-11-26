@@ -23,6 +23,13 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _publicButton;
         [SerializeField] private CommonButton _privateButton;
 
+        /// <summary>로비 뒤로가기를 타이틀 씬 전환으로 전달한다.</summary>
+        public override bool OnBackPressed()
+        {
+            BackClicked?.Invoke();
+            return false;
+        }
+
         private bool _layoutReady;
 
         /// <summary>닉 입력 변경.</summary>

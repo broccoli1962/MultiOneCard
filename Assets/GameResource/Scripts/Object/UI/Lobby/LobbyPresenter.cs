@@ -155,7 +155,7 @@ namespace Backend.Object.UI
 
         private void OnBackClicked()
         {
-            UIManager.Close(View);
+            AppFlow.LoadSceneAsync(SceneId.TitleScene).Forget();
         }
 
         private void OnSettingsClicked()
