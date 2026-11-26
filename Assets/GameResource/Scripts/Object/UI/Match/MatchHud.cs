@@ -32,7 +32,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _hudText ??= FindOrCreateText("HudText");
+            _hudText ??= FindWidget<TextMeshProUGUI>("HudText");
             if (_hudText != null)
             {
                 _hudText.textWrappingMode = TextWrappingModes.Normal;
@@ -125,10 +125,5 @@ namespace Backend.Object.UI
             return "P" + seat;
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null && existing.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
     }
 }

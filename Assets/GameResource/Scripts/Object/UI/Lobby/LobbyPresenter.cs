@@ -10,11 +10,11 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class LobbyPresenter : UIPresenter<LobbyPanel>
     {
-        private const string PrefNick = "guest_nick";
-        private const int NickMin = 2;
-        private const int NickMax = 12;
-        private const int RoomCodeMin = 4;
-        private const int RoomCodeMax = 8;
+        private const string PREF_NICK = "guest_nick";
+        private const int NICK_MIN = 2;
+        private const int NICK_MAX = 12;
+        private const int ROOM_CODE_MIN = 4;
+        private const int ROOM_CODE_MAX = 8;
         private bool _isPrivate;
 
         /// <summary>호스트가 방을 닫았을 때 로비에 띄울 안내.</summary>
@@ -45,7 +45,7 @@ namespace Backend.Object.UI
         public override void OnOpen()
         {
             View.EnsureLayout();
-            View.SetNick(PlayerPrefs.GetString(PrefNick, string.Empty));
+            View.SetNick(PlayerPrefs.GetString(PREF_NICK, string.Empty));
             View.SetVisibility(_isPrivate);
             var notice = _pendingNotice;
             _pendingNotice = null;
@@ -95,7 +95,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            PlayerPrefs.SetString(PrefNick, normalized);
+            PlayerPrefs.SetString(PREF_NICK, normalized);
         }
 
         private void OnVisibilityClicked(bool isPrivate)
@@ -171,14 +171,14 @@ namespace Backend.Object.UI
                 return false;
             }
 
-            PlayerPrefs.SetString(PrefNick, nick);
+            PlayerPrefs.SetString(PREF_NICK, nick);
             return true;
         }
 
         private static bool TryNormalizeNick(string value, out string nick)
         {
             nick = value != null ? value.Trim() : string.Empty;
-            return nick.Length >= NickMin && nick.Length <= NickMax;
+            return nick.Length >= NICK_MIN && nick.Length <= NICK_MAX;
         }
 
         private static string RelayStatus()
@@ -202,8 +202,8 @@ namespace Backend.Object.UI
         private static bool IsJoinCode(string value)
         {
             if (string.IsNullOrEmpty(value)
-                || value.Length < RoomCodeMin
-                || value.Length > RoomCodeMax)
+                || value.Length < ROOM_CODE_MIN
+                || value.Length > ROOM_CODE_MAX)
             {
                 return false;
             }

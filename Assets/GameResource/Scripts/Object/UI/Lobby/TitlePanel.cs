@@ -48,11 +48,11 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindOrCreateText("Title");
-            _webWarningText ??= FindOrCreateText("WebWarning");
-            _startButton ??= FindOrCreateButton("Start");
-            _settingsButton ??= FindOrCreateButton("Settings");
-            _quitButton ??= FindOrCreateButton("Quit");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _webWarningText ??= FindWidget<TextMeshProUGUI>("WebWarning");
+            _startButton ??= FindButton("Start");
+            _settingsButton ??= FindButton("Settings");
+            _quitButton ??= FindButton("Quit");
             BindButton(_startButton, () => StartClicked?.Invoke());
             BindButton(_settingsButton, () => SettingsClicked?.Invoke());
             BindButton(_quitButton, () => QuitClicked?.Invoke());
@@ -97,39 +97,5 @@ namespace Backend.Object.UI
                 "방을 만든 탭이 서버입니다. 다른 탭으로 바꾸거나 창을 최소화하면 게임이 끊길 수 있습니다.";
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

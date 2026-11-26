@@ -10,8 +10,8 @@ namespace Backend.Util.Editor
     /// </summary>
     public static class CardTextureImportUtil
     {
-        private const string CardsFolder = "Assets/GameResource/Data/Cards";
-        private const int MaxTextureSize = 2048;
+        private const string CARDS_FOLDER = "Assets/GameResource/Data/Cards";
+        private const int MAX_TEXTURE_SIZE = 2048;
         private static readonly string[] Platforms = { "Standalone", "Android", "WebGL", "iPhone" };
 
         /// <summary>
@@ -32,7 +32,7 @@ namespace Backend.Util.Editor
         /// </summary>
         public static int ApplySharpSettings()
         {
-            var guids = AssetDatabase.FindAssets("t:Texture2D", new[] { CardsFolder });
+            var guids = AssetDatabase.FindAssets("t:Texture2D", new[] { CARDS_FOLDER });
             var paths = new List<string>();
             for (var i = 0; i < guids.Length; i++)
             {
@@ -70,7 +70,7 @@ namespace Backend.Util.Editor
             }
 
             AssetDatabase.SaveAssets();
-            Debug.Log($"[CardTextureImportUtil] Applied sharp settings to {paths.Count} textures under {CardsFolder}");
+            Debug.Log($"[CardTextureImportUtil] Applied sharp settings to {paths.Count} textures under {CARDS_FOLDER}");
             return paths.Count;
         }
 
@@ -96,7 +96,7 @@ namespace Backend.Util.Editor
             ti.npotScale = TextureImporterNPOTScale.None;
             ti.isReadable = false;
             ti.sRGBTexture = true;
-            ti.maxTextureSize = MaxTextureSize;
+            ti.maxTextureSize = MAX_TEXTURE_SIZE;
 
             var settings = new TextureImporterSettings();
             ti.ReadTextureSettings(settings);
@@ -137,7 +137,7 @@ namespace Backend.Util.Editor
         private static void ApplyPlatformUncompressed(TextureImporterPlatformSettings ps, bool overridden)
         {
             ps.overridden = overridden;
-            ps.maxTextureSize = MaxTextureSize;
+            ps.maxTextureSize = MAX_TEXTURE_SIZE;
             ps.resizeAlgorithm = TextureResizeAlgorithm.Mitchell;
             ps.format = TextureImporterFormat.RGBA32;
             ps.textureCompression = TextureImporterCompression.Uncompressed;

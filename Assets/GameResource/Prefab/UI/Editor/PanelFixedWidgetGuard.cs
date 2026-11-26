@@ -7,7 +7,7 @@ namespace Backend.Object.UI.Editor
     /// <summary>
     /// TitlePanel / LobbyPanel / RoomPanel / MatchPanel / ResultPanel
     /// 고정 위젯이 프리팹 자식 + SerializeField 로 배선됐는지 검사한다.
-    /// EnsureLayout / FindOrCreate 는 GameObject 를 만들지 않고 이미 있는 ChoiceSheet·CardView 만 찾는다.
+    /// EnsureLayout / FindWidget 는 GameObject 를 만들지 않고 이미 있는 ChoiceSheet·CardView 만 찾는다.
     /// </summary>
     public static class PanelFixedWidgetGuard
     {
@@ -46,7 +46,7 @@ namespace Backend.Object.UI.Editor
             for (var i = 0; i < behaviours.Length; i++)
             {
                 var behaviour = behaviours[i];
-                if (behaviour == NoneRelevant(behaviour))
+                if (!IsFixedWidgetOwner(behaviour))
                 {
                     continue;
                 }
@@ -86,22 +86,10 @@ namespace Backend.Object.UI.Editor
             return true;
         }
 
-        private static MonoBehaviour NoneRelevant(MonoBehaviour behaviour)
+        private static bool IsFixedWidgetOwner(MonoBehaviour behaviour)
         {
-            if (behaviour == null)
-            {
-                return behaviour;
-            }
-
-            var typeName = behaviour.GetType().Name;
-            if (typeName == "TitlePanel" || typeName == "LobbyPanel" || typeName == "RoomPanel"
-                || typeName == "MatchPanel" || typeName == "ResultPanel" || typeName == "ChatView"
-                || typeName == "ChoiceSheet" || typeName == "MatchHud" || typeName == "CardView")
-            {
-                return null;
-            }
-
-            return behaviour;
+            return behaviour is TitlePanel or LobbyPanel or RoomPanel or MatchPanel or ResultPanel
+                or ChatView or ChoiceSheet or MatchHud or CardView;
         }
     }
 }

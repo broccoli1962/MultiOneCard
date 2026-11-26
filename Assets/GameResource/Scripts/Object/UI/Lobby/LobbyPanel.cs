@@ -81,17 +81,17 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindOrCreateText("Title");
-            _nickInput ??= FindOrCreateInput("NickInput");
-            _createRoomButton ??= FindOrCreateButton("CreateRoom");
-            _roomListButton ??= FindOrCreateButton("RoomList");
-            _roomCodeInput ??= FindOrCreateInput("RoomCodeInput");
-            _joinRoomButton ??= FindOrCreateButton("JoinRoom");
-            _statusText ??= FindOrCreateText("Status");
-            _backButton ??= FindOrCreateButton("Back");
-            _settingsButton ??= FindOrCreateButton("Settings");
-            _publicButton ??= FindOrCreateButton("Public");
-            _privateButton ??= FindOrCreateButton("Private");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _nickInput ??= FindWidget<TMP_InputField>("NickInput");
+            _createRoomButton ??= FindButton("CreateRoom");
+            _roomListButton ??= FindButton("RoomList");
+            _roomCodeInput ??= FindWidget<TMP_InputField>("RoomCodeInput");
+            _joinRoomButton ??= FindButton("JoinRoom");
+            _statusText ??= FindWidget<TextMeshProUGUI>("Status");
+            _backButton ??= FindButton("Back");
+            _settingsButton ??= FindButton("Settings");
+            _publicButton ??= FindButton("Public");
+            _privateButton ??= FindButton("Private");
 
             BindInput(_nickInput, value => NickChanged?.Invoke(value));
             BindButton(_createRoomButton, () => CreateRoomClicked?.Invoke());
@@ -137,47 +137,6 @@ namespace Backend.Object.UI
             {
                 _statusText.text = status ?? string.Empty;
             }
-        }
-
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private TMP_InputField FindOrCreateInput(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TMP_InputField input) ? input : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
         }
 
         private static void BindInput(TMP_InputField input, UnityEngine.Events.UnityAction<string> action)

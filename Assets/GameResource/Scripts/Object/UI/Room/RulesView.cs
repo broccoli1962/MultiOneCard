@@ -11,7 +11,7 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class RulesView : UIView
     {
-        private static readonly Color BodyColor = Color.black;
+        private static readonly Color _bodyColor = new Color32(255, 232, 200, 255);
 
         [SerializeField] private TextMeshProUGUI _summaryText;
         [SerializeField] private GameObject _hostRoot;
@@ -75,7 +75,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _summaryText.color = BodyColor;
+            _summaryText.color = _bodyColor;
             _summaryText.alignment = TextAlignmentOptions.TopLeft;
             _summaryText.lineSpacing = 10f;
             _summaryText.textWrappingMode = TextWrappingModes.Normal;
@@ -99,33 +99,5 @@ namespace Backend.Object.UI
             base.OnShow();
         }
 
-        private GameObject FindChild(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private CommonButton FindButton(string name)
-        {
-            var go = FindChild(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

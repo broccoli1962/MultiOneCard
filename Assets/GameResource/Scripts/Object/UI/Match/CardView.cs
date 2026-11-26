@@ -23,19 +23,20 @@ namespace Backend.Object.UI
         /// <summary>마우스 오버 시 살짝 올리는 픽셀.</summary>
         public const float HoverLift = 12f;
 
-        private static readonly Dictionary<string, Sprite> SpriteCache = new Dictionary<string, Sprite>();
-        private static readonly List<RaycastResult> RaycastHits = new List<RaycastResult>();
-        private static readonly Color FrontTint = new Color(0.93f, 0.9f, 0.82f, 1f);
-        private static readonly Color BackTint = new Color(0.22f, 0.28f, 0.4f, 1f);
-        private static readonly Color SuitBlack = new Color(0.18f, 0.18f, 0.2f, 1f);
-        private static readonly Color SuitRed = new Color(0.72f, 0.18f, 0.2f, 1f);
-        private static readonly Color SuitBlue = new Color(0.16f, 0.32f, 0.72f, 1f);
-        private static readonly Color SpecTint = new Color(0.45f, 0.38f, 0.22f, 1f);
+        private static readonly Dictionary<string, Sprite> _spriteCache = new Dictionary<string, Sprite>();
+        private static readonly List<RaycastResult> _raycastHits = new List<RaycastResult>();
+        private static readonly Color _frontTint = new Color(0.93f, 0.9f, 0.82f, 1f);
+        private static readonly Color _backTint = new Color(0.22f, 0.28f, 0.4f, 1f);
+        private static readonly Color _suitBlack = new Color(0.18f, 0.18f, 0.2f, 1f);
+        private static readonly Color _suitRed = new Color(0.72f, 0.18f, 0.2f, 1f);
+        private static readonly Color _suitBlue = new Color(0.16f, 0.32f, 0.72f, 1f);
+        private static readonly Color _specTint = new Color(0.45f, 0.38f, 0.22f, 1f);
 
         [SerializeField] private Image _fill;
         [SerializeField] private TextMeshProUGUI _label;
         [SerializeField] private CommonButton _button;
         [SerializeField] private CanvasGroup _group;
+        [SerializeField] private GameObject _playableMarker;
 
         private Vector2 _restAnchored;
         private float _restZ;
@@ -231,7 +232,7 @@ namespace Backend.Object.UI
             var label = string.IsNullOrEmpty(caption) ? count.ToString() : caption;
             BindCardArt(
                 CardArtKeys.BackAddress(),
-                justActed ? new Color(0.42f, 0.36f, 0.18f, 1f) : BackTint,
+                justActed ? new Color(0.42f, 0.36f, 0.18f, 1f) : _backTint,
                 label,
                 Color.white,
                 alwaysShowLabel: true);
@@ -375,14 +376,14 @@ namespace Backend.Object.UI
             {
                 position = pointer.position.ReadValue()
             };
-            RaycastHits.Clear();
-            es.RaycastAll(data, RaycastHits);
-            if (RaycastHits.Count == 0)
+            _raycastHits.Clear();
+            es.RaycastAll(data, _raycastHits);
+            if (_raycastHits.Count == 0)
             {
                 return false;
             }
 
-            var top = RaycastHits[0].gameObject;
+            var top = _raycastHits[0].gameObject;
             return top == CachedGameObject || top.transform.IsChildOf(CachedTransform);
         }
 
@@ -425,6 +426,9 @@ namespace Backend.Object.UI
         /// </summary>
         public void SetInteractable(bool interactable)
         {
+            if (_playableMarker != null)
+                _playableMarker.SetActive(InstanceId >= 0 && _legal && interactable);
+
             if (_button != null)
             {
                 _button.interactable = interactable;
@@ -615,7 +619,7 @@ namespace Backend.Object.UI
                 return true;
             }
 
-            return SpriteCache.TryGetValue(address, out sprite) && sprite != null;
+            return _spriteCache.TryGetValue(address, out sprite) && sprite != null;
         }
 
         private static Sprite LoadCardSprite(string address)
@@ -633,7 +637,7 @@ namespace Backend.Object.UI
             var sprite = ResourceManager.LoadResource<Sprite>(address);
             if (sprite != null)
             {
-                SpriteCache[address] = sprite;
+                _spriteCache[address] = sprite;
             }
 
             return sprite;
@@ -654,7 +658,7 @@ namespace Backend.Object.UI
             var sprite = await ResourceManager.LoadResourceAsync<Sprite>(address);
             if (sprite != null)
             {
-                SpriteCache[address] = sprite;
+                _spriteCache[address] = sprite;
             }
 
             return sprite;
@@ -664,34 +668,34 @@ namespace Backend.Object.UI
         {
             if (string.IsNullOrEmpty(defId))
             {
-                return FrontTint;
+                return _frontTint;
             }
 
             if (defId.StartsWith("SPEC", StringComparison.Ordinal) || defId.StartsWith("JOKER", StringComparison.Ordinal))
             {
-                return SpecTint;
+                return _specTint;
             }
 
-            return FrontTint;
+            return _frontTint;
         }
 
         private static Color FrontLabelColor(string defId)
         {
             if (string.IsNullOrEmpty(defId) || defId.Length < 1)
             {
-                return SuitBlack;
+                return _suitBlack;
             }
 
             switch (defId[0])
             {
                 case 'H':
                 case 'D':
-                    return SuitRed;
+                    return _suitRed;
                 case 'R':
                 case 'M':
-                    return SuitBlue;
+                    return _suitBlue;
                 default:
-                    return SuitBlack;
+                    return _suitBlack;
             }
         }
     }

@@ -9,7 +9,7 @@ namespace Backend.Object.UI
     /// <summary>
     /// 방 목록 한 줄. 이름·인원·입장만 표시한다.
     /// </summary>
-    public sealed class RoomListRow : CachedMonobehaviour
+    public sealed class RoomListRow : PrefabView
     {
         [SerializeField] private TextMeshProUGUI _nameText;
         [SerializeField] private TextMeshProUGUI _seatsText;
@@ -25,8 +25,8 @@ namespace Backend.Object.UI
         /// </summary>
         public void EnsureLayout()
         {
-            _nameText ??= FindText("Name");
-            _seatsText ??= FindText("Seats");
+            _nameText ??= FindWidget<TextMeshProUGUI>("Name");
+            _seatsText ??= FindWidget<TextMeshProUGUI>("Seats");
             if (_joinButton == null)
             {
                 if (TryGetComponent(out CommonButton selfButton))
@@ -77,10 +77,5 @@ namespace Backend.Object.UI
             }
         }
 
-        private TextMeshProUGUI FindText(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null && existing.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
     }
 }

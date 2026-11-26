@@ -24,7 +24,7 @@ namespace Backend.Object.UI
         public const float FanStep = 67f;
         public const float MinFanStep = 38f;
         public const float MaxFanAngle = 20f;
-        public const float RestY = 8f;
+        public const float RestY = 34f;
         public const float RowGap = 108f;
         public const float PlayDropLift = 150f;
         public const float DrawDuration = 0.3f;

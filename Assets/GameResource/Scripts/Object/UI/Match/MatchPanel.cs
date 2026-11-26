@@ -166,34 +166,34 @@ namespace Backend.Object.UI
                 TryGetComponent(out _inputGroup);
             }
 
-            _matchHud ??= FindOrCreateComponent<MatchHud>("MatchHud");
+            _matchHud ??= FindWidget<MatchHud>("MatchHud");
             if (_matchHud != null)
             {
                 _matchHud.EnsureLayout(_font);
             }
 
             HideChild("Hud");
-            _statusText ??= FindOrCreateText("Status");
-            _lastPlayText ??= FindOrCreateText("LastPlay");
+            _statusText ??= FindWidget<TextMeshProUGUI>("Status");
+            _lastPlayText ??= FindWidget<TextMeshProUGUI>("LastPlay");
             HideChild("Status");
             HideChild("LastPlay");
-            _resultText ??= FindOrCreateText("Result");
-            _jokerGauge ??= FindOrCreateComponent<JokerGaugeView>("JokerGauge");
+            _resultText ??= FindWidget<TextMeshProUGUI>("Result");
+            _jokerGauge ??= FindWidget<JokerGaugeView>("JokerGauge");
             if (_jokerGauge != null)
             {
                 _jokerGauge.EnsureLayout();
             }
 
             EnsureOpponentViews();
-            _discardView ??= FindOrCreateCard("DiscardTop");
-            _deckView ??= FindOrCreateCard("Deck");
+            _discardView ??= FindCard("DiscardTop");
+            _deckView ??= FindCard("Deck");
             if (_deckView != null)
             {
                 _deckView.Clicked -= OnDeckClicked;
                 _deckView.Clicked += OnDeckClicked;
             }
 
-            _handCountText ??= FindOrCreateText("HandCount");
+            _handCountText ??= FindWidget<TextMeshProUGUI>("HandCount");
             if (_handCountText != null)
             {
                 _handCountText.alignment = TextAlignmentOptions.Center;
@@ -211,7 +211,7 @@ namespace Backend.Object.UI
                 }
             }
 
-            _cardPrefab ??= FindOrCreateCard("CardTemplate");
+            _cardPrefab ??= FindCard("CardTemplate");
             if (_cardPrefab != null)
             {
                 _cardPrefab.EnsureParts(_font);
@@ -220,7 +220,7 @@ namespace Backend.Object.UI
 
             if (_handContainer == null || _handLayout == null)
             {
-                var handGo = FindOrCreate("Hand");
+                var handGo = FindChild("Hand");
                 if (handGo != null)
                 {
                     _handContainer = handGo.GetComponent<RectTransform>();
@@ -252,8 +252,8 @@ namespace Backend.Object.UI
             }
 
             EnsurePreview();
-            _drawButton ??= FindOrCreateButton("Draw");
-            _turnNickText ??= FindOrCreateText("TurnNick");
+            _drawButton ??= FindButton("Draw");
+            _turnNickText ??= FindWidget<TextMeshProUGUI>("TurnNick");
             if (_turnNickText != null)
             {
                 _turnNickText.alignment = TextAlignmentOptions.Center;
@@ -266,16 +266,16 @@ namespace Backend.Object.UI
                 }
             }
 
-            _acceptButton ??= FindOrCreateButton("Accept");
-            _surrenderButton ??= FindOrCreateButton("Surrender");
-            _chatButton ??= FindOrCreateButton("Chat");
-            _chatView ??= FindOrCreateComponent<ChatView>("ChatView");
+            _acceptButton ??= FindButton("Accept");
+            _surrenderButton ??= FindButton("Surrender");
+            _chatButton ??= FindButton("Chat");
+            _chatView ??= FindWidget<ChatView>("ChatView");
             if (_chatView != null)
             {
                 _chatView.EnsureLayout(_font);
             }
 
-            _choiceSheet ??= FindOrCreateComponent<ChoiceSheet>("ChoiceSheet");
+            _choiceSheet ??= FindWidget<ChoiceSheet>("ChoiceSheet");
             if (_choiceSheet != null)
             {
                 _choiceSheet.EnsureLayout(_font);
@@ -678,7 +678,7 @@ namespace Backend.Object.UI
         {
             if (_previewRoot == null)
             {
-                var root = FindOrCreate("Preview");
+                var root = FindChild("Preview");
                 if (root != null)
                 {
                     _previewRoot = root.GetComponent<RectTransform>();
@@ -955,15 +955,9 @@ namespace Backend.Object.UI
             }
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
+        private CardView FindCard(string name)
         {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CardView FindOrCreateCard(string name)
-        {
-            var go = FindOrCreate(name);
+            var go = FindChild(name);
             if (go == null || !go.TryGetComponent(out CardView card))
             {
                 return null;
@@ -971,18 +965,6 @@ namespace Backend.Object.UI
 
             card.EnsureParts(_font);
             return card;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
         }
 
         private SuitAnnounceView EnsureSuitAnnounce()
@@ -1010,18 +992,6 @@ namespace Backend.Object.UI
 
             _suitAnnounce.EnsureLayout(_font);
             return _suitAnnounce;
-        }
-
-        private T FindOrCreateComponent<T>(string name) where T : Component
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out T component) ? component : null;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
         }
 
         private RectTransform SeatVisual(int seat)
@@ -1298,7 +1268,7 @@ namespace Backend.Object.UI
             for (var i = 0; i < _opponentViews.Length; i++)
             {
                 var name = i == 0 ? "OpponentCard" : "Opponent" + i;
-                _opponentViews[i] ??= FindOrCreateCard(name);
+                _opponentViews[i] ??= FindCard(name);
                 if (_opponentViews[i] != null)
                 {
                     _opponentViews[i].LayoutCaptionBelow();
@@ -1381,16 +1351,6 @@ namespace Backend.Object.UI
             rt.sizeDelta = size;
         }
 
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 
     /// <summary>

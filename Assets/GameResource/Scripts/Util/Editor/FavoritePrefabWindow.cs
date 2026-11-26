@@ -9,7 +9,7 @@ public class FavoritePrefabWindow : EditorWindow
 {
     private List<GameObject> prefabs;
     private VisualElement prefabListContainer;
-    private const string EditorPrefsKey = "FavoritePrefabWindow_PrefabGUIDs";
+    private const string EDITOR_PREFS_KEY = "FavoritePrefabWindow_PrefabGUIDs";
 
     [MenuItem("Tools/Util/Favorite Prefab")]
     public static void ShowWindow()
@@ -152,7 +152,7 @@ public class FavoritePrefabWindow : EditorWindow
     {
         if (prefabs == null || prefabs.Count == 0)
         {
-            EditorPrefs.DeleteKey(EditorPrefsKey);
+            EditorPrefs.DeleteKey(EDITOR_PREFS_KEY);
             return;
         }
 
@@ -160,7 +160,7 @@ public class FavoritePrefabWindow : EditorWindow
             .Where(p => p != null)
             .Select(p => AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(p)))
             .ToList();
-        EditorPrefs.SetString(EditorPrefsKey, string.Join(",", guidList));
+        EditorPrefs.SetString(EDITOR_PREFS_KEY, string.Join(",", guidList));
     }
 
     private void LoadPrefabList()
@@ -170,9 +170,9 @@ public class FavoritePrefabWindow : EditorWindow
             return; // 이미 초기화된 경우 무시
         }
 
-        if (EditorPrefs.HasKey(EditorPrefsKey))
+        if (EditorPrefs.HasKey(EDITOR_PREFS_KEY))
         {
-            var guidString = EditorPrefs.GetString(EditorPrefsKey);
+            var guidString = EditorPrefs.GetString(EDITOR_PREFS_KEY);
             if (!string.IsNullOrEmpty(guidString))
             {
                 var guids = guidString.Split(',');

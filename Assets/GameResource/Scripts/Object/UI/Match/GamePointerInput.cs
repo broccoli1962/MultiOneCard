@@ -9,7 +9,7 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class GamePointerInput : IDisposable
     {
-        private static readonly string[] HotkeyPaths =
+        private static readonly string[] _hotkeyPaths =
         {
             "<Keyboard>/s",
             "<Keyboard>/h",
@@ -42,9 +42,9 @@ namespace Backend.Object.UI
             _cancel.AddBinding("<Mouse>/rightButton");
 
             _hotkeys = new InputAction("GamePointerHotkeys", InputActionType.Button);
-            for (var i = 0; i < HotkeyPaths.Length; i++)
+            for (var i = 0; i < _hotkeyPaths.Length; i++)
             {
-                _hotkeys.AddBinding(HotkeyPaths[i]);
+                _hotkeys.AddBinding(_hotkeyPaths[i]);
             }
 
             _confirm.performed += OnConfirm;

@@ -11,8 +11,8 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class SettingsPopup : UIPopup<SettingsPresenter>
     {
-        private static readonly Color IdleButton = Color.white;
-        private static readonly Color SelectedButton = new Color(1f, 0.9f, 0.65f, 1f);
+        private static readonly Color _idleButton = Color.white;
+        private static readonly Color _selectedButton = new Color(1f, 0.9f, 0.65f, 1f);
 
         [SerializeField] private TMP_FontAsset _font;
         [SerializeField] private TextMeshProUGUI _titleText;
@@ -73,26 +73,26 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindOrCreateText("Title");
-            _modeLabel ??= FindOrCreateText("ModeLabel");
-            _windowedButton ??= FindOrCreateButton("Windowed");
-            _fullscreenButton ??= FindOrCreateButton("Fullscreen");
-            _borderlessButton ??= FindOrCreateButton("Borderless");
-            _resolutionLabel ??= FindOrCreateText("ResolutionLabel");
-            _resolutionPrevButton ??= FindOrCreateButton("ResolutionPrev");
-            _resolutionValue ??= FindOrCreateText("ResolutionValue");
-            _resolutionNextButton ??= FindOrCreateButton("ResolutionNext");
-            _unsupportedText ??= FindOrCreateText("Unsupported");
-            _soundLabel ??= FindOrCreateText("SoundLabel");
-            _bgmLabel ??= FindOrCreateText("BgmLabel");
-            _bgmPrevButton ??= FindOrCreateButton("BgmPrev");
-            _bgmValue ??= FindOrCreateText("BgmValue");
-            _bgmNextButton ??= FindOrCreateButton("BgmNext");
-            _sfxLabel ??= FindOrCreateText("SfxLabel");
-            _sfxPrevButton ??= FindOrCreateButton("SfxPrev");
-            _sfxValue ??= FindOrCreateText("SfxValue");
-            _sfxNextButton ??= FindOrCreateButton("SfxNext");
-            _closeButton ??= FindOrCreateButton("Close");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _modeLabel ??= FindWidget<TextMeshProUGUI>("ModeLabel");
+            _windowedButton ??= FindButton("Windowed");
+            _fullscreenButton ??= FindButton("Fullscreen");
+            _borderlessButton ??= FindButton("Borderless");
+            _resolutionLabel ??= FindWidget<TextMeshProUGUI>("ResolutionLabel");
+            _resolutionPrevButton ??= FindButton("ResolutionPrev");
+            _resolutionValue ??= FindWidget<TextMeshProUGUI>("ResolutionValue");
+            _resolutionNextButton ??= FindButton("ResolutionNext");
+            _unsupportedText ??= FindWidget<TextMeshProUGUI>("Unsupported");
+            _soundLabel ??= FindWidget<TextMeshProUGUI>("SoundLabel");
+            _bgmLabel ??= FindWidget<TextMeshProUGUI>("BgmLabel");
+            _bgmPrevButton ??= FindButton("BgmPrev");
+            _bgmValue ??= FindWidget<TextMeshProUGUI>("BgmValue");
+            _bgmNextButton ??= FindButton("BgmNext");
+            _sfxLabel ??= FindWidget<TextMeshProUGUI>("SfxLabel");
+            _sfxPrevButton ??= FindButton("SfxPrev");
+            _sfxValue ??= FindWidget<TextMeshProUGUI>("SfxValue");
+            _sfxNextButton ??= FindButton("SfxNext");
+            _closeButton ??= FindButton("Close");
 
             BindButton(_windowedButton, () => ModeClicked?.Invoke(DisplayWindowMode.Windowed));
             BindButton(_fullscreenButton, () => ModeClicked?.Invoke(DisplayWindowMode.Fullscreen));
@@ -172,41 +172,6 @@ namespace Backend.Object.UI
             }
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
-
         private static void Highlight(CommonButton button, bool selected)
         {
             if (button == null || !button.TryGetComponent(out Image image))
@@ -214,7 +179,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            image.color = selected ? SelectedButton : IdleButton;
+            image.color = selected ? _selectedButton : _idleButton;
         }
 
         private static void SetActive(Component component, bool active)

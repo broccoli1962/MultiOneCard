@@ -40,27 +40,5 @@ namespace Backend.Object.UI
             _layoutReady = true;
         }
 
-        private CommonButton FindButton(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            if (existing == null || !existing.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

@@ -19,12 +19,12 @@ namespace Backend.Object.UI
             "q_nice", "q_gg", "q_hurry", "q_go", "q_oops", "q_wow", "q_thanks", "q_again",
         };
 
-        private static readonly string[] QuickLabels =
+        private static readonly string[] _quickLabels =
         {
             "나이스", "수고", "빨리", "가자", "실수", "대박", "고마워", "한판더",
         };
 
-        private const int VisibleLines = 30;
+        private const int VISIBLE_LINES = 30;
 
         [SerializeField] private TMP_FontAsset _font;
         [SerializeField] private TextMeshProUGUI _logText;
@@ -33,7 +33,7 @@ namespace Backend.Object.UI
         [SerializeField] private RectTransform _quickRow;
         [SerializeField] private CommonButton[] _quickButtons = new CommonButton[8];
 
-        private readonly List<string> _lines = new List<string>(VisibleLines);
+        private readonly List<string> _lines = new List<string>(VISIBLE_LINES);
         private bool _layoutReady;
 
         /// <summary>본문 전송. 80자 이내.</summary>
@@ -60,11 +60,11 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _logText ??= FindOrCreateText("Log");
-            _quickRow ??= FindOrCreateRect("QuickRow");
+            _logText ??= FindWidget<TextMeshProUGUI>("Log");
+            _quickRow ??= FindRect("QuickRow");
             BindQuickButtons();
-            _input ??= FindOrCreateInput("ChatInput");
-            _sendButton ??= FindOrCreateButton("Send");
+            _input ??= FindWidget<TMP_InputField>("ChatInput");
+            _sendButton ??= FindButton("Send");
 
             BindButton(_sendButton, OnSendPressed);
             BindInputEndEdit(_input, OnInputEndEdit);
@@ -89,7 +89,7 @@ namespace Backend.Object.UI
         {
             EnsureLayout();
             _lines.Add(FormatLine(chatType, nick, text, quickId));
-            while (_lines.Count > VisibleLines)
+            while (_lines.Count > VISIBLE_LINES)
             {
                 _lines.RemoveAt(0);
             }
@@ -133,7 +133,7 @@ namespace Backend.Object.UI
             {
                 if (QuickIds[i] == quickId)
                 {
-                    return QuickLabels[i];
+                    return _quickLabels[i];
                 }
             }
 
@@ -241,7 +241,7 @@ namespace Backend.Object.UI
 
             for (var i = 0; i < QuickIds.Length; i++)
             {
-                _quickButtons[i] ??= FindOrCreateChildButton(_quickRow, "Quick_" + QuickIds[i]);
+                _quickButtons[i] ??= FindChildButton(_quickRow, "Quick_" + QuickIds[i]);
             }
         }
 
@@ -252,31 +252,7 @@ namespace Backend.Object.UI
                 : null;
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private TMP_InputField FindOrCreateInput(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TMP_InputField input) ? input : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private CommonButton FindOrCreateChildButton(Transform parent, string name)
+        private CommonButton FindChildButton(Transform parent, string name)
         {
             var existing = parent.Find(name);
             if (existing == null || !existing.TryGetComponent(out CommonButton button))
@@ -288,27 +264,10 @@ namespace Backend.Object.UI
             return button;
         }
 
-        private RectTransform FindOrCreateRect(string name)
+        private RectTransform FindRect(string name)
         {
-            var go = FindOrCreate(name);
+            var go = FindChild(name);
             return go != null ? go.GetComponent<RectTransform>() : null;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
         }
 
         private static void BindInputEndEdit(TMP_InputField input, UnityEngine.Events.UnityAction<string> action)

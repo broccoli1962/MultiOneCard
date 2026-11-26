@@ -12,7 +12,7 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class ChoiceSheet : UIView
     {
-        private static readonly string[] SuitCodes =
+        private static readonly string[] _suitCodes =
         {
             SuitCode.Spade, SuitCode.Heart, SuitCode.Diamond, SuitCode.Club, SuitCode.Star, SuitCode.Moon,
         };
@@ -58,20 +58,20 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _title ??= FindOrCreateText("Title");
-            _suitGrid ??= FindOrCreate("SuitGrid");
+            _title ??= FindWidget<TextMeshProUGUI>("Title");
+            _suitGrid ??= FindChild("SuitGrid");
             BindSuitButtons();
-            _queenRow ??= FindOrCreate("QueenRow");
-            _kingRow ??= FindOrCreate("KingRow");
-            _queenReverseButton ??= FindOrCreateChildButton(_queenRow, "QueenRowReverse");
-            _queenGiveButton ??= FindOrCreateChildButton(_queenRow, "QueenRowGive");
-            _kingExtraButton ??= FindOrCreateChildButton(_kingRow, "KingRowExtra");
-            _kingHideButton ??= FindOrCreateChildButton(_kingRow, "KingRowHide");
-            _confirmButton ??= FindOrCreateButton("Confirm");
+            _queenRow ??= FindChild("QueenRow");
+            _kingRow ??= FindChild("KingRow");
+            _queenReverseButton ??= FindChildButton(_queenRow, "QueenRowReverse");
+            _queenGiveButton ??= FindChildButton(_queenRow, "QueenRowGive");
+            _kingExtraButton ??= FindChildButton(_kingRow, "KingRowExtra");
+            _kingHideButton ??= FindChildButton(_kingRow, "KingRowHide");
+            _confirmButton ??= FindButton("Confirm");
 
-            for (var i = 0; i < SuitCodes.Length; i++)
+            for (var i = 0; i < _suitCodes.Length; i++)
             {
-                var suit = SuitCodes[i];
+                var suit = _suitCodes[i];
                 BindButton(SuitButton(i), () => SuitClicked?.Invoke(suit));
             }
 
@@ -197,9 +197,9 @@ namespace Backend.Object.UI
 
         private void BindSuitButtons()
         {
-            if (_suitButtons == null || _suitButtons.Length != SuitCodes.Length)
+            if (_suitButtons == null || _suitButtons.Length != _suitCodes.Length)
             {
-                _suitButtons = new CommonButton[SuitCodes.Length];
+                _suitButtons = new CommonButton[_suitCodes.Length];
             }
 
             if (_suitGrid == null)
@@ -207,16 +207,16 @@ namespace Backend.Object.UI
                 return;
             }
 
-            for (var i = 0; i < SuitCodes.Length; i++)
+            for (var i = 0; i < _suitCodes.Length; i++)
             {
-                _suitButtons[i] ??= FindOrCreateChildButton(_suitGrid, "Suit_" + SuitCodes[i]);
+                _suitButtons[i] ??= FindChildButton(_suitGrid, "Suit_" + _suitCodes[i]);
             }
         }
 
         private void PaintSuitButtons()
         {
             Sprite sharedSprite = null;
-            for (var i = 0; i < SuitCodes.Length; i++)
+            for (var i = 0; i < _suitCodes.Length; i++)
             {
                 var button = SuitButton(i);
                 if (button != null && button.TryGetComponent(out Image image) && image.sprite != null)
@@ -226,7 +226,7 @@ namespace Backend.Object.UI
                 }
             }
 
-            for (var i = 0; i < SuitCodes.Length; i++)
+            for (var i = 0; i < _suitCodes.Length; i++)
             {
                 var button = SuitButton(i);
                 if (button == null)
@@ -241,7 +241,7 @@ namespace Backend.Object.UI
                         image.sprite = sharedSprite;
                     }
 
-                    image.color = image.sprite != null ? Color.white : SuitBackground(SuitCodes[i]);
+                    image.color = image.sprite != null ? Color.white : SuitBackground(_suitCodes[i]);
                     image.preserveAspect = image.sprite != null;
                 }
 
@@ -253,8 +253,8 @@ namespace Backend.Object.UI
 
                 var painted = button.TryGetComponent(out Image paintedImage) && paintedImage.sprite != null;
                 label.enabled = !painted;
-                label.text = SuitGlyph(SuitCodes[i]);
-                label.color = SuitForeground(SuitCodes[i]);
+                label.text = SuitGlyph(_suitCodes[i]);
+                label.color = SuitForeground(_suitCodes[i]);
                 label.alignment = TextAlignmentOptions.Center;
                 label.raycastTarget = false;
             }
@@ -262,9 +262,9 @@ namespace Backend.Object.UI
 
         private static int SuitIndex(string suit)
         {
-            for (var i = 0; i < SuitCodes.Length; i++)
+            for (var i = 0; i < _suitCodes.Length; i++)
             {
-                if (SuitCodes[i] == suit)
+                if (_suitCodes[i] == suit)
                 {
                     return i;
                 }
@@ -280,19 +280,7 @@ namespace Backend.Object.UI
                 : null;
         }
 
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private CommonButton FindOrCreateChildButton(GameObject parent, string name)
+        private CommonButton FindChildButton(GameObject parent, string name)
         {
             if (parent == null)
             {
@@ -307,34 +295,6 @@ namespace Backend.Object.UI
 
             button.useSound = false;
             return button;
-        }
-
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            if (button.OnClick == null)
-            {
-                button.OnClick = new UnityEngine.Events.UnityEvent();
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
         }
 
         private static void SetActive(GameObject go, bool active)

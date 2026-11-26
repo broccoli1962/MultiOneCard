@@ -11,22 +11,22 @@ namespace Backend.Object.Management
 {
     public static class ObjectPoolManager
     {
-        private static readonly Dictionary<Type, object> pools = new();
-        private static readonly Dictionary<Type, IClearable> clearablePools = new();
+        private static readonly Dictionary<Type, object> _pools = new();
+        private static readonly Dictionary<Type, IClearable> _clearablePools = new();
 
-        private static readonly Dictionary<string, object> namedPools = new();
-        private static readonly Dictionary<string, IClearable> namedClearablePools = new();
+        private static readonly Dictionary<string, object> _namedPools = new();
+        private static readonly Dictionary<string, IClearable> _namedClearablePools = new();
 
         // 💡 동시성(Race Condition) 제어를 위한 로딩 상태 추적 딕셔너리
-        private static readonly HashSet<Type> loadingTypes = new();
-        private static readonly HashSet<string> loadingNames = new();
+        private static readonly HashSet<Type> _loadingTypes = new();
+        private static readonly HashSet<string> _loadingNames = new();
 
         public static Pooling<T> GetPool<T>() where T : Component
         {
-            return pools.TryGetValue(typeof(T), out var pool) ? pool as Pooling<T> : null;
+            return _pools.TryGetValue(typeof(T), out var pool) ? pool as Pooling<T> : null;
         }
 
-        public static bool HasPool<T>() where T : Component => pools.ContainsKey(typeof(T));
+        public static bool HasPool<T>() where T : Component => _pools.ContainsKey(typeof(T));
 
         #region 프리팹 기반 풀 생성 (기존과 동일)
         public static Pooling<T> CreatePool<T>(
@@ -34,12 +34,12 @@ namespace Backend.Object.Management
             Action<T> onGet = null, Action<T> onRelease = null) where T : Component
         {
             var type = typeof(T);
-            if (pools.TryGetValue(type, out var existingPool))
+            if (_pools.TryGetValue(type, out var existingPool))
                 return existingPool as Pooling<T>;
 
             var newPool = new Pooling<T>(prefab, parent, defaultCapacity, maxSize, onGet, onRelease);
-            pools[type] = newPool;
-            clearablePools[type] = newPool;
+            _pools[type] = newPool;
+            _clearablePools[type] = newPool;
             return newPool;
         }
 
@@ -59,17 +59,17 @@ namespace Backend.Object.Management
         {
             var type = typeof(T);
 
-            if (pools.TryGetValue(type, out var existingPool))
+            if (_pools.TryGetValue(type, out var existingPool))
                 return existingPool as Pooling<T>;
 
             // 💡 개선 2: 동일 타입 중복 비동기 로딩 방지 (대기열 처리)
-            if (loadingTypes.Contains(type))
+            if (_loadingTypes.Contains(type))
             {
-                await UniTask.WaitWhile(() => loadingTypes.Contains(type), cancellationToken: token);
+                await UniTask.WaitWhile(() => _loadingTypes.Contains(type), cancellationToken: token);
                 return GetPool<T>();
             }
 
-            loadingTypes.Add(type);
+            _loadingTypes.Add(type);
             try
             {
                 var newPool = await Pooling<T>.CreateAsync(
@@ -77,13 +77,13 @@ namespace Backend.Object.Management
 
                 if (newPool == null) return null;
 
-                pools[type] = newPool;
-                clearablePools[type] = newPool;
+                _pools[type] = newPool;
+                _clearablePools[type] = newPool;
                 return newPool;
             }
             finally
             {
-                loadingTypes.Remove(type); // 성공/실패 무관하게 로딩 상태 해제
+                _loadingTypes.Remove(type); // 성공/실패 무관하게 로딩 상태 해제
             }
         }
 
@@ -115,26 +115,26 @@ namespace Backend.Object.Management
 
         public static Pooling<T> GetPool<T>(string name) where T : Component
         {
-            return namedPools.TryGetValue(name, out var pool) ? pool as Pooling<T> : null;
+            return _namedPools.TryGetValue(name, out var pool) ? pool as Pooling<T> : null;
         }
 
-        public static bool HasPool(string name) => namedPools.ContainsKey(name);
+        public static bool HasPool(string name) => _namedPools.ContainsKey(name);
 
         public static async UniTask<Pooling<T>> CreatePoolAsync<T>(
             string name, string addressableKey, Transform parent = null, int defaultCapacity = 10, int maxSize = 100,
             Action<T> onGet = null, Action<T> onRelease = null, CancellationToken token = default) where T : Component
         {
-            if (namedPools.TryGetValue(name, out var existingPool))
+            if (_namedPools.TryGetValue(name, out var existingPool))
                 return existingPool as Pooling<T>;
 
             // 💡 개선 2: 동일 이름 중복 비동기 로딩 방지 (가장 흔하게 발생하는 렉의 주범)
-            if (loadingNames.Contains(name))
+            if (_loadingNames.Contains(name))
             {
-                await UniTask.WaitWhile(() => loadingNames.Contains(name), cancellationToken: token);
+                await UniTask.WaitWhile(() => _loadingNames.Contains(name), cancellationToken: token);
                 return GetPool<T>(name);
             }
 
-            loadingNames.Add(name);
+            _loadingNames.Add(name);
             try
             {
                 var newPool = await Pooling<T>.CreateAsync(
@@ -142,13 +142,13 @@ namespace Backend.Object.Management
 
                 if (newPool == null) return null;
 
-                namedPools[name] = newPool;
-                namedClearablePools[name] = newPool;
+                _namedPools[name] = newPool;
+                _namedClearablePools[name] = newPool;
                 return newPool;
             }
             finally
             {
-                loadingNames.Remove(name);
+                _loadingNames.Remove(name);
             }
         }
 
@@ -200,54 +200,54 @@ namespace Backend.Object.Management
         public static void ReleasePool<T>() where T : Component
         {
             var type = typeof(T);
-            if (clearablePools.TryGetValue(type, out var disposable))
+            if (_clearablePools.TryGetValue(type, out var disposable))
             {
                 disposable.Dispose();
-                clearablePools.Remove(type);
+                _clearablePools.Remove(type);
             }
-            pools.Remove(type);
+            _pools.Remove(type);
         }
 
         public static void ReleasePool(string name)
         {
-            if (namedClearablePools.TryGetValue(name, out var disposable))
+            if (_namedClearablePools.TryGetValue(name, out var disposable))
             {
                 disposable.Dispose();
-                namedClearablePools.Remove(name);
+                _namedClearablePools.Remove(name);
             }
-            namedPools.Remove(name);
+            _namedPools.Remove(name);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSession()
         {
             // Pools retain callbacks and Unity objects from the previous Play session.
-            pools.Clear();
-            clearablePools.Clear();
-            namedPools.Clear();
-            namedClearablePools.Clear();
-            loadingTypes.Clear();
-            loadingNames.Clear();
+            _pools.Clear();
+            _clearablePools.Clear();
+            _namedPools.Clear();
+            _namedClearablePools.Clear();
+            _loadingTypes.Clear();
+            _loadingNames.Clear();
         }
 
         public static void ReleaseAllPools()
         {
-            foreach (var disposable in clearablePools.Values) disposable.Dispose();
-            foreach (var disposable in namedClearablePools.Values) disposable.Dispose();
+            foreach (var disposable in _clearablePools.Values) disposable.Dispose();
+            foreach (var disposable in _namedClearablePools.Values) disposable.Dispose();
 
             ResetSession();
         }
 
         public static void ClearAllInactivePools()
         {
-            foreach (var pool in clearablePools.Values) pool.Clear();
-            foreach (var pool in namedClearablePools.Values) pool.Clear();
+            foreach (var pool in _clearablePools.Values) pool.Clear();
+            foreach (var pool in _namedClearablePools.Values) pool.Clear();
         }
 
-        public static int PoolCount => pools.Count;
-        public static int NamedPoolCount => namedPools.Count;
-        public static IEnumerable<Type> RegisteredPoolTypes => pools.Keys;
-        public static IEnumerable<string> RegisteredPoolNames => namedPools.Keys;
+        public static int PoolCount => _pools.Count;
+        public static int NamedPoolCount => _namedPools.Count;
+        public static IEnumerable<Type> RegisteredPoolTypes => _pools.Keys;
+        public static IEnumerable<string> RegisteredPoolNames => _namedPools.Keys;
 
         #endregion
     }

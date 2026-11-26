@@ -52,8 +52,8 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindText("Title");
-            _statusText ??= FindText("Status");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _statusText ??= FindWidget<TextMeshProUGUI>("Status");
             _backButton ??= FindButton("Back");
             _refreshButton ??= FindButton("Refresh");
             if (_content == null)
@@ -141,39 +141,5 @@ namespace Backend.Object.UI
             JoinClicked?.Invoke(sessionId);
         }
 
-        private TextMeshProUGUI FindText(string name)
-        {
-            var go = FindChild(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CommonButton FindButton(string name)
-        {
-            var go = FindChild(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindChild(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

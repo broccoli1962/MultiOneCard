@@ -11,7 +11,7 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class RoomPanel : UIPanel<RoomPresenter>
     {
-        private const int MaxSlots = 6;
+        private const int MAX_SLOTS = 6;
 
         [SerializeField] private TMP_FontAsset _font;
         [SerializeField] private TextMeshProUGUI _titleText;
@@ -27,8 +27,8 @@ namespace Backend.Object.UI
         [SerializeField] private CommonButton _rulesButton;
         [SerializeField] private CommonButton _chatButton;
         [SerializeField] private CommonButton _backButton;
-        [SerializeField] private CommonButton[] _slotButtons = new CommonButton[MaxSlots];
-        [SerializeField] private TextMeshProUGUI[] _slotTexts = new TextMeshProUGUI[MaxSlots];
+        [SerializeField] private CommonButton[] _slotButtons = new CommonButton[MAX_SLOTS];
+        [SerializeField] private TextMeshProUGUI[] _slotTexts = new TextMeshProUGUI[MAX_SLOTS];
 
         private bool _layoutReady;
 
@@ -86,18 +86,18 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindOrCreateText("Title");
-            _roomCodeText ??= FindOrCreateText("RoomCode");
-            _copyCodeButton ??= FindOrCreateButton("CopyCode");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _roomCodeText ??= FindWidget<TextMeshProUGUI>("RoomCode");
+            _copyCodeButton ??= FindButton("CopyCode");
             EnsureSlots();
-            _readyButton ??= FindOrCreateButton("Ready");
-            _startButton ??= FindOrCreateButton("Start");
-            _rulesButton ??= FindOrCreateButton("Rules");
-            _chatButton ??= FindOrCreateButton("Chat");
-            _statusText ??= FindOrCreateText("Status");
-            _backButton ??= FindOrCreateButton("Back");
-            _chatView ??= FindOrCreateChat();
-            _rulesRoot ??= FindOrCreate("RulesRoot");
+            _readyButton ??= FindButton("Ready");
+            _startButton ??= FindButton("Start");
+            _rulesButton ??= FindButton("Rules");
+            _chatButton ??= FindButton("Chat");
+            _statusText ??= FindWidget<TextMeshProUGUI>("Status");
+            _backButton ??= FindButton("Back");
+            _chatView ??= FindChat();
+            _rulesRoot ??= FindChild("RulesRoot");
             if (_rulesRoot != null)
             {
                 _rulesView ??= _rulesRoot.GetComponent<RulesView>();
@@ -134,7 +134,7 @@ namespace Backend.Object.UI
             BindButton(_rulesButton, () => RulesClicked?.Invoke());
             BindButton(_chatButton, () => ChatClicked?.Invoke());
             BindButton(_backButton, () => BackClicked?.Invoke());
-            for (var i = 0; i < MaxSlots; i++)
+            for (var i = 0; i < MAX_SLOTS; i++)
             {
                 var seat = i;
                 var button = SlotButton(i);
@@ -177,12 +177,12 @@ namespace Backend.Object.UI
                 seatCount = 2;
             }
 
-            if (seatCount > MaxSlots)
+            if (seatCount > MAX_SLOTS)
             {
-                seatCount = MaxSlots;
+                seatCount = MAX_SLOTS;
             }
 
-            for (var i = 0; i < MaxSlots; i++)
+            for (var i = 0; i < MAX_SLOTS; i++)
             {
                 var show = i < seatCount;
                 var button = SlotButton(i);
@@ -313,19 +313,19 @@ namespace Backend.Object.UI
 
         private void EnsureSlots()
         {
-            if (_slotButtons == null || _slotButtons.Length != MaxSlots)
+            if (_slotButtons == null || _slotButtons.Length != MAX_SLOTS)
             {
-                _slotButtons = new CommonButton[MaxSlots];
+                _slotButtons = new CommonButton[MAX_SLOTS];
             }
 
-            if (_slotTexts == null || _slotTexts.Length != MaxSlots)
+            if (_slotTexts == null || _slotTexts.Length != MAX_SLOTS)
             {
-                _slotTexts = new TextMeshProUGUI[MaxSlots];
+                _slotTexts = new TextMeshProUGUI[MAX_SLOTS];
             }
 
-            for (var i = 0; i < MaxSlots; i++)
+            for (var i = 0; i < MAX_SLOTS; i++)
             {
-                _slotButtons[i] ??= FindOrCreateButton("Slot" + i);
+                _slotButtons[i] ??= FindButton("Slot" + i);
                 if (_slotTexts[i] == null && _slotButtons[i] != null)
                 {
                     _slotTexts[i] = _slotButtons[i].GetComponentInChildren<TextMeshProUGUI>(true);
@@ -347,45 +347,11 @@ namespace Backend.Object.UI
                 : null;
         }
 
-        private ChatView FindOrCreateChat()
+        private ChatView FindChat()
         {
-            var go = FindOrCreate("ChatView");
+            var go = FindChild("ChatView");
             return go != null && go.TryGetComponent(out ChatView chat) ? chat : null;
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

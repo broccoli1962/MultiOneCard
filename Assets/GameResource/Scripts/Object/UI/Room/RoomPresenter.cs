@@ -13,18 +13,18 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class RoomPresenter : UIPresenter<RoomPanel>
     {
-        private const int DefaultSeatCount = 6;
-        private const int ChatMaxChars = 80;
-        private const int RelayEventTimeoutMs = 20000;
-        private const int WebRelayEventTimeoutMs = 45000;
+        private const int DEFAULT_SEAT_COUNT = 6;
+        private const int CHAT_MAX_CHARS = 80;
+        private const int RELAY_EVENT_TIMEOUT_MS = 20000;
+        private const int WEB_RELAY_EVENT_TIMEOUT_MS = 45000;
 
         private static int RelayTimeoutMs =>
-            WebBuild.IsPlayer ? WebRelayEventTimeoutMs : RelayEventTimeoutMs;
+            WebBuild.IsPlayer ? WEB_RELAY_EVENT_TIMEOUT_MS : RELAY_EVENT_TIMEOUT_MS;
 
         private static string _pendingNick = "P0";
         private static string _pendingRoomCode = string.Empty;
         private static string _pendingSessionId;
-        private static int _pendingSeatCount = DefaultSeatCount;
+        private static int _pendingSeatCount = DEFAULT_SEAT_COUNT;
         private static bool _pendingIsHost = true;
         private static bool _pendingIsPrivate;
         private static NetClient _pendingResumeClient;
@@ -75,7 +75,7 @@ namespace Backend.Object.UI
             var room = client != null ? client.Room : null;
             _pendingSeatCount = room != null && room.seatCount >= 2
                 ? ClampSeatCount(room.seatCount)
-                : DefaultSeatCount;
+                : DEFAULT_SEAT_COUNT;
             _pendingRoomCode = room != null && !string.IsNullOrEmpty(room.roomCode)
                 ? room.roomCode
                 : string.Empty;
@@ -656,9 +656,9 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (body.Length > ChatMaxChars)
+            if (body.Length > CHAT_MAX_CHARS)
             {
-                body = body.Substring(0, ChatMaxChars);
+                body = body.Substring(0, CHAT_MAX_CHARS);
             }
 
             SendChat(body, null);

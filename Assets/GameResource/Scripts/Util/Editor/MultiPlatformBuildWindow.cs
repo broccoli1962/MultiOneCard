@@ -20,18 +20,18 @@ namespace Backend.Editor
     /// </summary>
     public sealed class MultiPlatformBuildWindow : EditorWindow
     {
-        private const string MenuPath = "Tools/OneTable/Build Windows + Mobile + Web";
+        private const string MENU_PATH = "Tools/OneTable/Build Windows + Mobile + Web";
         internal const string PrefWin = "OneTable.MultiBuild.Win";
         internal const string PrefAndroid = "OneTable.MultiBuild.Android";
         internal const string PrefWeb = "OneTable.MultiBuild.Web";
-        private const string PrefDev = "OneTable.MultiBuild.Dev";
-        private const string PrefOut = "OneTable.MultiBuild.Out";
+        private const string PREF_DEV = "OneTable.MultiBuild.Dev";
+        private const string PREF_OUT = "OneTable.MultiBuild.Out";
 
         private bool _development;
         private string _outputRoot;
         private Vector2 _logScroll;
 
-        [MenuItem(MenuPath, priority = 10)]
+        [MenuItem(MENU_PATH, priority = 10)]
         public static void Open()
         {
             var window = GetWindow<MultiPlatformBuildWindow>("멀티 빌드");
@@ -41,18 +41,18 @@ namespace Backend.Editor
 
         private void OnEnable()
         {
-            _development = EditorPrefs.GetBool(PrefDev, false);
-            _outputRoot = EditorPrefs.GetString(PrefOut, DefaultOutputRoot());
+            _development = EditorPrefs.GetBool(PREF_DEV, false);
+            _outputRoot = EditorPrefs.GetString(PREF_OUT, DefaultOutputRoot());
             EditorApplication.update += RepaintIfRunning;
         }
 
         private void OnDisable()
         {
             EditorApplication.update -= RepaintIfRunning;
-            EditorPrefs.SetBool(PrefDev, _development);
+            EditorPrefs.SetBool(PREF_DEV, _development);
             if (!string.IsNullOrEmpty(_outputRoot))
             {
-                EditorPrefs.SetString(PrefOut, _outputRoot);
+                EditorPrefs.SetString(PREF_OUT, _outputRoot);
             }
         }
 
@@ -226,8 +226,8 @@ namespace Backend.Editor
             }
 
             var root = string.IsNullOrWhiteSpace(_outputRoot) ? DefaultOutputRoot() : _outputRoot.Trim();
-            EditorPrefs.SetString(PrefOut, root);
-            EditorPrefs.SetBool(PrefDev, _development);
+            EditorPrefs.SetString(PREF_OUT, root);
+            EditorPrefs.SetBool(PREF_DEV, _development);
             MultiPlatformBuildSelectWindow.Open(root, _development);
         }
 
@@ -250,8 +250,8 @@ namespace Backend.Editor
             }
 
             var root = string.IsNullOrWhiteSpace(outputRoot) ? DefaultOutputRoot() : outputRoot.Trim();
-            EditorPrefs.SetString(PrefOut, root);
-            EditorPrefs.SetBool(PrefDev, development);
+            EditorPrefs.SetString(PREF_OUT, root);
+            EditorPrefs.SetBool(PREF_DEV, development);
             MultiPlatformBuildRunner.Start(ids, root, development);
             return true;
         }
@@ -409,8 +409,8 @@ namespace Backend.Editor
         public const string IdWeb = "WebGL";
         public const string GitHubPagesUrl = "https://broccoli1962.github.io/MultiOneCard-web/";
         public const string GitHubPagesUrlSource = "https://broccoli1962.github.io/MultiOneCard/";
-        private const string GitHubWebFolder = "web";
-        private const string GitHubPlayerFolder = "WebPlayer";
+        private const string GIT_HUB_WEB_FOLDER = "web";
+        private const string GIT_HUB_PLAYER_FOLDER = "WebPlayer";
 
         [MenuItem("Tools/OneTable/Prepare GitHub Web Player", priority = 11)]
         public static void PrepareGitHubWebPlayerMenu()
@@ -442,39 +442,39 @@ namespace Backend.Editor
             }
         }
 
-        private const string KeyRunning = "OneTable.MultiBuild.Running";
-        private const string KeyQueue = "OneTable.MultiBuild.Queue";
-        private const string KeyLog = "OneTable.MultiBuild.Log";
-        private const string KeyDev = "OneTable.MultiBuild.RunDev";
-        private const string KeyOut = "OneTable.MultiBuild.RunOut";
-        private const string KeyRestore = "OneTable.MultiBuild.Restore";
-        private const string KeyCancel = "OneTable.MultiBuild.Cancel";
+        private const string KEY_RUNNING = "OneTable.MultiBuild.Running";
+        private const string KEY_QUEUE = "OneTable.MultiBuild.Queue";
+        private const string KEY_LOG = "OneTable.MultiBuild.Log";
+        private const string KEY_DEV = "OneTable.MultiBuild.RunDev";
+        private const string KEY_OUT = "OneTable.MultiBuild.RunOut";
+        private const string KEY_RESTORE = "OneTable.MultiBuild.Restore";
+        private const string KEY_CANCEL = "OneTable.MultiBuild.Cancel";
 
         static MultiPlatformBuildRunner()
         {
             EditorApplication.delayCall += Resume;
         }
 
-        public static bool IsRunning => SessionState.GetBool(KeyRunning, false);
+        public static bool IsRunning => SessionState.GetBool(KEY_RUNNING, false);
 
-        public static string LogText => SessionState.GetString(KeyLog, string.Empty);
+        public static string LogText => SessionState.GetString(KEY_LOG, string.Empty);
 
         public static void Start(List<string> ids, string outputRoot, bool development)
         {
-            SessionState.SetBool(KeyRunning, true);
-            SessionState.SetBool(KeyCancel, false);
-            SessionState.SetString(KeyQueue, string.Join(",", ids));
-            SessionState.SetString(KeyOut, outputRoot ?? string.Empty);
-            SessionState.SetBool(KeyDev, development);
-            SessionState.SetInt(KeyRestore, (int)EditorUserBuildSettings.activeBuildTarget);
-            SessionState.SetString(KeyLog, string.Empty);
+            SessionState.SetBool(KEY_RUNNING, true);
+            SessionState.SetBool(KEY_CANCEL, false);
+            SessionState.SetString(KEY_QUEUE, string.Join(",", ids));
+            SessionState.SetString(KEY_OUT, outputRoot ?? string.Empty);
+            SessionState.SetBool(KEY_DEV, development);
+            SessionState.SetInt(KEY_RESTORE, (int)EditorUserBuildSettings.activeBuildTarget);
+            SessionState.SetString(KEY_LOG, string.Empty);
             Append("시작  " + string.Join(", ", ids));
             EditorApplication.delayCall += Step;
         }
 
         public static void RequestCancel()
         {
-            SessionState.SetBool(KeyCancel, true);
+            SessionState.SetBool(KEY_CANCEL, true);
             Append("다음 플랫폼부터 취소 요청");
         }
 
@@ -487,7 +487,7 @@ namespace Backend.Editor
 
             if (ReadQueue().Count == 0)
             {
-                SessionState.SetBool(KeyRunning, false);
+                SessionState.SetBool(KEY_RUNNING, false);
                 return;
             }
 
@@ -514,7 +514,7 @@ namespace Backend.Editor
                 return;
             }
 
-            if (SessionState.GetBool(KeyCancel, false))
+            if (SessionState.GetBool(KEY_CANCEL, false))
             {
                 Finish("취소됨");
                 return;
@@ -612,15 +612,15 @@ namespace Backend.Editor
 
         private static void Finish(string reason)
         {
-            SessionState.SetBool(KeyRunning, false);
-            SessionState.SetBool(KeyCancel, false);
+            SessionState.SetBool(KEY_RUNNING, false);
+            SessionState.SetBool(KEY_CANCEL, false);
             EditorUtility.ClearProgressBar();
             Append(reason);
 
             var restore = (BuildTarget)SessionState.GetInt(
-                KeyRestore,
+                KEY_RESTORE,
                 (int)BuildTarget.StandaloneWindows64);
-            var output = SessionState.GetString(KeyOut, string.Empty);
+            var output = SessionState.GetString(KEY_OUT, string.Empty);
             if (!string.IsNullOrEmpty(output) && Directory.Exists(output))
             {
                 EditorUtility.RevealInFinder(output);
@@ -681,7 +681,7 @@ namespace Backend.Editor
                 scenes = scenes,
                 locationPathName = location,
                 target = target,
-                options = SessionState.GetBool(KeyDev, false)
+                options = SessionState.GetBool(KEY_DEV, false)
                     ? BuildOptions.Development
                     : BuildOptions.None,
             };
@@ -727,7 +727,7 @@ namespace Backend.Editor
 
         private static string OutputPath(string id)
         {
-            var root = SessionState.GetString(KeyOut, string.Empty);
+            var root = SessionState.GetString(KEY_OUT, string.Empty);
             var product = Sanitize(PlayerSettings.productName);
             switch (id)
             {
@@ -765,7 +765,7 @@ namespace Backend.Editor
 
         private static List<string> ReadQueue()
         {
-            var raw = SessionState.GetString(KeyQueue, string.Empty);
+            var raw = SessionState.GetString(KEY_QUEUE, string.Empty);
             var list = new List<string>();
             if (string.IsNullOrEmpty(raw))
             {
@@ -793,7 +793,7 @@ namespace Backend.Editor
                 queue.RemoveAt(0);
             }
 
-            SessionState.SetString(KeyQueue, string.Join(",", queue));
+            SessionState.SetString(KEY_QUEUE, string.Join(",", queue));
         }
 
         private static void Append(string line)
@@ -811,7 +811,7 @@ namespace Backend.Editor
                 next = next.Substring(next.Length - 8000);
             }
 
-            SessionState.SetString(KeyLog, next);
+            SessionState.SetString(KEY_LOG, next);
             Debug.Log("[멀티 빌드] " + line);
         }
 
@@ -865,11 +865,11 @@ namespace Backend.Editor
             }
 
             var root = Directory.GetParent(Application.dataPath).FullName;
-            var webDest = Path.Combine(root, GitHubWebFolder);
+            var webDest = Path.Combine(root, GIT_HUB_WEB_FOLDER);
             PublishWebPlayerTo(webGlOutputDir, webDest, keepGitMetadata: true);
             PublishWebPlayerTo(
                 webGlOutputDir,
-                Path.Combine(root, GitHubPlayerFolder),
+                Path.Combine(root, GIT_HUB_PLAYER_FOLDER),
                 keepGitMetadata: false);
             return webDest;
         }

@@ -18,8 +18,8 @@ namespace Backend.Object.Management
     {
         public const string DataSeats = "seats";
         public const string DataKind = "kind";
-        private const string SessionType = "onetable";
-        private const int QueryCount = 25;
+        private const string SESSION_TYPE = "onetable";
+        private const int QUERY_COUNT = 25;
 
         private static ISession _hosted;
         private static ISession _joined;
@@ -137,12 +137,12 @@ namespace Backend.Object.Management
                     MaxPlayers = seats,
                     IsPrivate = isPrivate,
                     Name = name,
-                    Type = SessionType,
+                    Type = SESSION_TYPE,
                     SessionProperties = new Dictionary<string, SessionProperty>
                     {
                         {
                             DataKind,
-                            new SessionProperty(SessionType, VisibilityPropertyOptions.Public, PropertyIndex.String1)
+                            new SessionProperty(SESSION_TYPE, VisibilityPropertyOptions.Public, PropertyIndex.String1)
                         },
                         {
                             DataSeats,
@@ -157,7 +157,7 @@ namespace Backend.Object.Management
 
         private static JoinSessionOptions BuildJoinOptions(ApplyRelayHandler handler)
         {
-            return new JoinSessionOptions { Type = SessionType }
+            return new JoinSessionOptions { Type = SESSION_TYPE }
                 .WithNetworkOptions(new NetworkOptions { RelayProtocol = PreferredRelayProtocol })
                 .WithNetworkHandler(handler);
         }
@@ -278,10 +278,10 @@ namespace Backend.Object.Management
                 results = await RequireMultiplayer().QuerySessionsAsync(
                     new QuerySessionsOptions
                     {
-                        Count = QueryCount,
+                        Count = QUERY_COUNT,
                         FilterOptions = new List<FilterOption>
                         {
-                            new FilterOption(FilterField.StringIndex1, SessionType, FilterOperation.Equal),
+                            new FilterOption(FilterField.StringIndex1, SESSION_TYPE, FilterOperation.Equal),
                             new FilterOption(FilterField.AvailableSlots, "0", FilterOperation.Greater),
                         },
                     });
@@ -291,7 +291,7 @@ namespace Backend.Object.Management
                 results = await RequireMultiplayer().QuerySessionsAsync(
                     new QuerySessionsOptions
                     {
-                        Count = QueryCount,
+                        Count = QUERY_COUNT,
                         FilterOptions = new List<FilterOption>
                         {
                             new FilterOption(FilterField.AvailableSlots, "0", FilterOperation.Greater),

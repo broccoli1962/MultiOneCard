@@ -54,12 +54,12 @@ namespace Backend.Object.UI
                 return;
             }
 
-            _titleText ??= FindOrCreateText("Title");
-            _rankText ??= FindOrCreateText("Ranks");
-            _timerText ??= FindOrCreateText("Timer");
-            _statusText ??= FindOrCreateText("Status");
-            _yesButton ??= FindOrCreateButton("Yes");
-            _noButton ??= FindOrCreateButton("No");
+            _titleText ??= FindWidget<TextMeshProUGUI>("Title");
+            _rankText ??= FindWidget<TextMeshProUGUI>("Ranks");
+            _timerText ??= FindWidget<TextMeshProUGUI>("Timer");
+            _statusText ??= FindWidget<TextMeshProUGUI>("Status");
+            _yesButton ??= FindButton("Yes");
+            _noButton ??= FindButton("No");
 
             BindButton(_yesButton, () => YesClicked?.Invoke());
             BindButton(_noButton, () => NoClicked?.Invoke());
@@ -118,39 +118,5 @@ namespace Backend.Object.UI
             return false;
         }
 
-        private TextMeshProUGUI FindOrCreateText(string name)
-        {
-            var go = FindOrCreate(name);
-            return go != null && go.TryGetComponent(out TextMeshProUGUI text) ? text : null;
-        }
-
-        private CommonButton FindOrCreateButton(string name)
-        {
-            var go = FindOrCreate(name);
-            if (go == null || !go.TryGetComponent(out CommonButton button))
-            {
-                return null;
-            }
-
-            button.useSound = false;
-            return button;
-        }
-
-        private GameObject FindOrCreate(string name)
-        {
-            var existing = CachedTransform.Find(name);
-            return existing != null ? existing.gameObject : null;
-        }
-
-        private static void BindButton(CommonButton button, UnityEngine.Events.UnityAction action)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener(action);
-        }
     }
 }

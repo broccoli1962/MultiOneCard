@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading;
 using Backend.AddressableKey;
 using Backend.Util.Management;
@@ -19,7 +19,7 @@ namespace Backend.Object.Management
         private const string PREF_SFX_ENABLED = "AudioManager_SfxEnabled";
         private const string PREF_BGM_VOLUME = "AudioManager_BgmVolume";
         private const string PREF_SFX_VOLUME = "AudioManager_SfxVolume";
-        private const float DefaultVolume = 1f;
+        private const float DEFAULT_VOLUME = 1f;
 
         // 로드된 클립을 캐싱할 딕셔너리
         private readonly Dictionary<string, AudioClip> _clips = new();
@@ -29,7 +29,7 @@ namespace Backend.Object.Management
         private string _currentBgmKey;
         private string _pendingBgmKey;
         private CancellationTokenSource _bgmCancellationTokenSource;
-        private const float _fadeDuration = 0.5f;
+        private const float FADE_DURATION = 0.5f;
 
         // AudioMixer
         private AudioMixer _mixer;
@@ -68,7 +68,7 @@ namespace Backend.Object.Management
         /// </summary>
         public float BgmVolume
         {
-            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_BGM_VOLUME, DefaultVolume));
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_BGM_VOLUME, DEFAULT_VOLUME));
             set
             {
                 PlayerPrefs.SetFloat(PREF_BGM_VOLUME, Mathf.Clamp01(value));
@@ -82,7 +82,7 @@ namespace Backend.Object.Management
         /// </summary>
         public float SfxVolume
         {
-            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_SFX_VOLUME, DefaultVolume));
+            get => Mathf.Clamp01(PlayerPrefs.GetFloat(PREF_SFX_VOLUME, DEFAULT_VOLUME));
             set
             {
                 PlayerPrefs.SetFloat(PREF_SFX_VOLUME, Mathf.Clamp01(value));
@@ -258,7 +258,7 @@ namespace Backend.Object.Management
             _currentBgmKey = key;
             _pendingBgmKey = null;
 
-            await FadeVolume(newAudioSource, 1f, _fadeDuration);
+            await FadeVolume(newAudioSource, 1f, FADE_DURATION);
         }
 
         private void StopBgmImmediate()
@@ -293,7 +293,7 @@ namespace Backend.Object.Management
 
         private async UniTaskVoid FadeOutAndReturn(AudioSource source)
         {
-            await FadeVolume(source, 0f, _fadeDuration);
+            await FadeVolume(source, 0f, FADE_DURATION);
             if (source != null)
             {
                 source.Stop();

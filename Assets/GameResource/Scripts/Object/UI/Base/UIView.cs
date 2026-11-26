@@ -8,7 +8,7 @@ namespace Backend.Object.UI
     /// 단일 패널 내부에서 탭 전환으로 교체되는 View 의 베이스.
     /// UIManager 가 관리하지 않으며, 부모 Panel 이 Show / Hide 를 직접 호출한다.
     /// </summary>
-    public abstract class UIView : CachedMonobehaviour
+    public abstract class UIView : PrefabView
     {
         [Header("Transition")]
         [SerializeField] private bool _useAnimation;

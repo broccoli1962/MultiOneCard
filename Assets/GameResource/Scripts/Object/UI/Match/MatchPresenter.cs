@@ -14,8 +14,8 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class MatchPresenter : UIPresenter<MatchPanel>
     {
-        private const int DummySeatCount = 2;
-        private const int DummySeed = 1;
+        private const int DUMMY_SEAT_COUNT = 2;
+        private const int DUMMY_SEED = 1;
 
         private static LocalLoopback _pendingLoopback;
         private static NetClient[] _pendingClients;
@@ -28,7 +28,7 @@ namespace Backend.Object.UI
         private NetClient[] _clients;
         private bool _remote;
         private int _localSeat;
-        private int _seatCount = DummySeatCount;
+        private int _seatCount = DUMMY_SEAT_COUNT;
         private GamePointerInput _pointerInput;
         private int _viewSeat;
         private int _selectedPlayId = -1;
@@ -263,7 +263,7 @@ namespace Backend.Object.UI
                 ? room.seatCount
                 : (match != null && match.handCounts != null && match.handCounts.Length >= 2
                     ? match.handCounts.Length
-                    : DummySeatCount);
+                    : DUMMY_SEAT_COUNT);
             _clients = new NetClient[_seatCount];
             if (client != null && _localSeat >= 0 && _localSeat < _seatCount)
             {
@@ -279,7 +279,7 @@ namespace Backend.Object.UI
 
         private void StartHotseat()
         {
-            StartSession(DummySeatCount, DummySeed, "HOTSIT", new[] { "P0", "P1" }, autoStart: true);
+            StartSession(DUMMY_SEAT_COUNT, DUMMY_SEED, "HOTSIT", new[] { "P0", "P1" }, autoStart: true);
         }
 
         private void RestartSession()
@@ -291,13 +291,13 @@ namespace Backend.Object.UI
                 seed = 1;
             }
 
-            StartSession(_seatCount < 2 ? DummySeatCount : _seatCount, seed, "HOTSIT", nicks, autoStart: true);
+            StartSession(_seatCount < 2 ? DUMMY_SEAT_COUNT : _seatCount, seed, "HOTSIT", nicks, autoStart: true);
         }
 
         private void StartSession(int seatCount, int seed, string roomCode, string[] nicks, bool autoStart)
         {
             StopHotseat();
-            _seatCount = seatCount < 2 ? DummySeatCount : seatCount;
+            _seatCount = seatCount < 2 ? DUMMY_SEAT_COUNT : seatCount;
             var runtime = new MatchRuntime(_seatCount, seed, roomCode: roomCode, nicks: nicks);
             _loopback = new LocalLoopback(runtime);
             _clients = new NetClient[_seatCount];

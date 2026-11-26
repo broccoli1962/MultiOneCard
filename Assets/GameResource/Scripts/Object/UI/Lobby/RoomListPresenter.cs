@@ -11,9 +11,9 @@ namespace Backend.Object.UI
     /// </summary>
     public sealed class RoomListPresenter : UIPresenter<RoomListPanel>
     {
-        private const string PrefNick = "guest_nick";
-        private const int NickMin = 2;
-        private const int NickMax = 12;
+        private const string PREF_NICK = "guest_nick";
+        private const int NICK_MIN = 2;
+        private const int NICK_MAX = 12;
 
         private int _querySeq;
 
@@ -63,7 +63,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (!TryNormalizeNick(PlayerPrefs.GetString(PrefNick, string.Empty), out var nick))
+            if (!TryNormalizeNick(PlayerPrefs.GetString(PREF_NICK, string.Empty), out var nick))
             {
                 View.SetStatus("닉은 2~12자");
                 return;
@@ -134,7 +134,7 @@ namespace Backend.Object.UI
         private static bool TryNormalizeNick(string value, out string nick)
         {
             nick = value != null ? value.Trim() : string.Empty;
-            return nick.Length >= NickMin && nick.Length <= NickMax;
+            return nick.Length >= NICK_MIN && nick.Length <= NICK_MAX;
         }
     }
 }

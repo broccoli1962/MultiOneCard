@@ -1,4 +1,4 @@
-﻿using Cysharp.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -12,29 +12,29 @@ namespace Backend.Object.Management.Pool
 {
     public class Pooling<T> : IClearable where T : Component
     {
-        private readonly ObjectPool<T> pool;
-        private readonly T prefab;
-        private readonly Transform parent;
-        private readonly Action<T> onGet;
-        private readonly Action<T> onRelease;
+        private readonly ObjectPool<T> _pool;
+        private readonly T _prefab;
+        private readonly Transform _parent;
+        private readonly Action<T> _onGet;
+        private readonly Action<T> _onRelease;
 
-        private AsyncOperationHandle<GameObject>? addressableHandle;
-        private readonly HashSet<T> activeObjects = new HashSet<T>();
+        private AsyncOperationHandle<GameObject>? _addressableHandle;
+        private readonly HashSet<T> _activeObjects = new HashSet<T>();
 
-        public int CountActive => pool.CountActive;
-        public int CountInactive => pool.CountInactive;
-        public int CountAll => pool.CountAll;
+        public int CountActive => _pool.CountActive;
+        public int CountInactive => _pool.CountInactive;
+        public int CountAll => _pool.CountAll;
 
         public Pooling(
             T prefab, Transform parent = null, int defaultCapacity = 10, int maxSize = 100,
             Action<T> onGet = null, Action<T> onRelease = null, bool collectionCheck = true)
         {
-            this.prefab = prefab;
-            this.parent = parent;
-            this.onGet = onGet;
-            this.onRelease = onRelease;
+            _prefab = prefab;
+            _parent = parent;
+            _onGet = onGet;
+            _onRelease = onRelease;
 
-            pool = new ObjectPool<T>(
+            _pool = new ObjectPool<T>(
                 CreatePooledItem, OnGetFromPool, OnReleaseToPool, OnDestroyPooledItem,
                 collectionCheck, defaultCapacity, maxSize
             );
@@ -42,7 +42,7 @@ namespace Backend.Object.Management.Pool
 
         internal void SetAddressableHandle(AsyncOperationHandle<GameObject> handle)
         {
-            addressableHandle = handle;
+            _addressableHandle = handle;
         }
 
         // 💡 개선 1: CancellationToken 추가 및 ToUniTask() 연동
@@ -91,57 +91,57 @@ namespace Backend.Object.Management.Pool
             return newPool;
         }
 
-        public T Get() => pool.Get();
-        public PooledObject<T> Get(out T instance) => pool.Get(out instance);
+        public T Get() => _pool.Get();
+        public PooledObject<T> Get(out T instance) => _pool.Get(out instance);
 
         public void Release(T element)
         {
             if (element == null) return;
-            pool.Release(element);
+            _pool.Release(element);
         }
 
         public void Clear()
         {
-            activeObjects.Clear();
-            pool.Clear();
+            _activeObjects.Clear();
+            _pool.Clear();
         }
 
         public void Dispose()
         {
-            activeObjects.Clear();
-            pool.Clear();
+            _activeObjects.Clear();
+            _pool.Clear();
 
-            if (addressableHandle.HasValue && addressableHandle.Value.IsValid())
+            if (_addressableHandle.HasValue && _addressableHandle.Value.IsValid())
             {
-                Addressables.Release(addressableHandle.Value);
-                addressableHandle = null;
+                Addressables.Release(_addressableHandle.Value);
+                _addressableHandle = null;
             }
         }
 
         private T CreatePooledItem()
         {
-            var instance = UnityEngine.Object.Instantiate(prefab, parent);
+            var instance = UnityEngine.Object.Instantiate(_prefab, _parent);
             instance.gameObject.SetActive(false);
             return instance;
         }
 
         private void OnGetFromPool(T element)
         {
-            activeObjects.Add(element);
+            _activeObjects.Add(element);
             element.gameObject.SetActive(true);
-            onGet?.Invoke(element);
+            _onGet?.Invoke(element);
         }
 
         private void OnReleaseToPool(T element)
         {
-            activeObjects.Remove(element);
-            onRelease?.Invoke(element);
+            _activeObjects.Remove(element);
+            _onRelease?.Invoke(element);
             element.gameObject.SetActive(false);
         }
 
         private void OnDestroyPooledItem(T element)
         {
-            activeObjects.Remove(element);
+            _activeObjects.Remove(element);
             if (element != null && element.gameObject != null)
             {
                 UnityEngine.Object.Destroy(element.gameObject);
@@ -151,7 +151,7 @@ namespace Backend.Object.Management.Pool
         public List<T> GetAllActive()
         {
             var result = ListPool<T>.Get();
-            foreach (var obj in activeObjects)
+            foreach (var obj in _activeObjects)
             {
                 result.Add(obj);
             }

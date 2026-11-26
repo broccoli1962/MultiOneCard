@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Backend.Util.Management
@@ -7,10 +7,10 @@ namespace Backend.Util.Management
     {
         #region CONSTANT FIELD API
 
-        private const string Suffix = " (Singleton)";
+        private const string SUFFIX = " (Singleton)";
 
-        private const string Pattern = "/([A-Z])(?=[A-Z][a-z])|([a-z])(?=[A-Z])/g";
-        private const string Replacement = "$& ";
+        private const string PATTERN = "/([A-Z])(?=[A-Z][a-z])|([a-z])(?=[A-Z])/g";
+        private const string REPLACEMENT = "$& ";
 
         #endregion
 
@@ -73,8 +73,8 @@ namespace Backend.Util.Management
                 _instance = clone.AddComponent<T>();
 
                 // Set singleton instance name.
-                var name = Regex.Replace(typeof(T).Name, Pattern, Replacement);
-                clone.name = name + Suffix;
+                var name = Regex.Replace(typeof(T).Name, PATTERN, REPLACEMENT);
+                clone.name = name + SUFFIX;
 
                 UnityEngine.Debug.Log("<color=#F8F8FF><b>[Singleton]</b> An instance is needed in the scene and no existing instances were found, so a new instance will be created.</color>");
 

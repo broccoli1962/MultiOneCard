@@ -9,7 +9,7 @@ namespace Backend.Object.UI
     /// 모든 UI 의 공통 베이스. View 책임만 가지며, Model 은 추후 Presenter 가 DataManager 로 조회.
     /// 공통 라이프사이클(Open SFX / Close Animation / Back Button) 을 처리한다.
     /// </summary>
-    public abstract class UIBase : CachedMonobehaviour
+    public abstract class UIBase : PrefabView
     {
         [Header("Open Sound")]
         [SerializeField] private bool _useOpenSound;

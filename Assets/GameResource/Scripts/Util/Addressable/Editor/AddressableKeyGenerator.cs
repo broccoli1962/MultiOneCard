@@ -1,4 +1,4 @@
-﻿using Backend.Util.Addressable;
+using Backend.Util.Addressable;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -10,8 +10,8 @@ namespace Backend.Editor
 {
     public static class AddressableKeyGenerator
     {
-        private const string FileName = "AddressableKeys.cs";
-        private const string ClassName = "AddressableKeys";
+        private const string FILE_NAME = "AddressableKeys.cs";
+        private const string CLASS_NAME = "AddressableKeys";
 
         [MenuItem("Tools/Addressables/Force Generate Keys")]
         public static void Generate()
@@ -47,7 +47,7 @@ namespace Backend.Editor
                 sb.AppendLine("{");
             }
 
-            sb.AppendLine($"{tap}public static class {ClassName}");
+            sb.AppendLine($"{tap}public static class {CLASS_NAME}");
             sb.AppendLine($"{tap}{{");
 
             foreach (var group in addrSettings.groups)
@@ -127,7 +127,7 @@ namespace Backend.Editor
 
             if (useNamespace) sb.AppendLine("}");
 
-            string relativePath = Path.Combine(folderPath, FileName).Replace('\\', '/');
+            string relativePath = Path.Combine(folderPath, FILE_NAME).Replace('\\', '/');
             string fullPath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
             
             string directory = Path.GetDirectoryName(fullPath);
