@@ -561,13 +561,6 @@ namespace Backend.Object.UI
                     return;
                 }
 
-                if (EndsWithRank(_lastPlayedDefId, 'Q'))
-                {
-                    _prompt = MatchPrompt.QueenMode;
-                    _status = "Q 고르기";
-                    return;
-                }
-
                 if (EndsWithRank(_lastPlayedDefId, 'K'))
                 {
                     _prompt = MatchPrompt.KingMode;
@@ -677,9 +670,6 @@ namespace Backend.Object.UI
             {
                 case RejectCode.NeedSuitPick:
                     _prompt = MatchPrompt.Suit;
-                    break;
-                case RejectCode.NeedQueenMode:
-                    _prompt = MatchPrompt.QueenMode;
                     break;
                 case RejectCode.NeedKingMode:
                     _prompt = MatchPrompt.KingMode;
@@ -1158,7 +1148,7 @@ namespace Backend.Object.UI
             {
                 _hoverPreviewId = -1;
             }
-            ApplyGivePromptFromMatch(match);
+            ApplyQueenPromptFromMatch(match);
             if (_prompt == MatchPrompt.MirrorDiscard)
             {
                 ApplyMirrorPrompt();
@@ -1336,13 +1326,19 @@ namespace Backend.Object.UI
         }
 
         /// <summary>
-        /// 대상이 감수해 pendingGive 가 켜지고 지금 낼 좌석이면 지급 시트를 연다.
-        /// QueenModeChosen 이벤트만 믿으면 TurnChanged 뒤에 시트가 풀린다.
+        /// 호스트의 공개 상태로 첫 Q의 효과 선택 또는 지급 카드 선택을 표시한다.
         /// </summary>
-        private void ApplyGivePromptFromMatch(PublicMatchView match)
+        private void ApplyQueenPromptFromMatch(PublicMatchView match)
         {
             if (match == null)
             {
+                return;
+            }
+
+            if (match.pendingQueenMode && IsActingSeat(match))
+            {
+                _prompt = MatchPrompt.QueenMode;
+                _status = "Q 고르기";
                 return;
             }
 
@@ -1353,7 +1349,7 @@ namespace Backend.Object.UI
                 return;
             }
 
-            if (_prompt == MatchPrompt.GiveCards && (match.queenStack <= 0 || !match.pendingGive))
+            if (_prompt == MatchPrompt.GiveCards || _prompt == MatchPrompt.QueenMode)
             {
                 _prompt = MatchPrompt.None;
             }

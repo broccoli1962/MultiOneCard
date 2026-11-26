@@ -312,7 +312,7 @@ namespace Backend.Object.UI
                 case MatchPrompt.Suit:
                     return "무늬 고르기";
                 case MatchPrompt.QueenMode:
-                    return $"Q 효과 선택 · 지급 시 {queenStack + 1}장";
+                    return "Q 효과 선택 · 지급 시 1장";
                 case MatchPrompt.KingMode:
                     return "K 고르기";
                 case MatchPrompt.GiveCards:

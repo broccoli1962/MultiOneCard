@@ -282,12 +282,7 @@ namespace Game.Rules
             state.PendingQueenModeSeat = null;
             if (mode == QueenMode.Give)
             {
-                state.QueenStack++;
-                state.LastQueenSeat = seat;
-                state.PendingGiveSeat = null;
-                state.QueenGiveTargetSeat = NextSeat(state, seat);
-                state.CurrentSeat = state.QueenGiveTargetSeat.Value;
-                ClearDrawFlags(state);
+                StackQueenGive(state, seat);
             }
             else
             {
@@ -830,9 +825,14 @@ namespace Game.Rules
 
             if (card.Rank == Rank.Queen)
             {
-                state.LastQueenSeat = seat;
-                state.QueenGiveTargetSeat = null;
-                state.PendingQueenModeSeat = seat;
+                if (state.QueenStack > 0)
+                {
+                    StackQueenGive(state, seat);
+                }
+                else
+                {
+                    state.PendingQueenModeSeat = seat;
+                }
                 return true;
             }
 
@@ -852,7 +852,16 @@ namespace Game.Rules
             return false;
         }
 
-        /// <summary>Q Reverse. 방향 반전 후 다음 활성에게 턴을 넘긴다.</summary>
+        private static void StackQueenGive(MatchState state, int seat)
+        {
+            state.QueenStack++;
+            state.LastQueenSeat = seat;
+            state.QueenGiveTargetSeat = NextSeat(state, seat);
+            state.CurrentSeat = state.QueenGiveTargetSeat.Value;
+            ClearDrawFlags(state);
+        }
+
+        /// <summary>첫 Q에서 선택한 리버스를 적용하고 다음 활성 좌석으로 진행한다.</summary>
         private static void ApplyQueenReverse(MatchState state)
         {
             state.Direction = -state.Direction;

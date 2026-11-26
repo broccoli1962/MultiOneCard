@@ -83,6 +83,7 @@ namespace Backend.Net
         public int attackStack;
         public bool spearInStack;
         public int queenStack;
+        public bool pendingQueenMode;
         public bool pendingGive;
         public int deckCount;
         public string[] recentDiscard;

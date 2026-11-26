@@ -1085,6 +1085,7 @@ namespace Backend.App
                 attackStack = _state.AttackStack,
                 spearInStack = _state.SpearInStack,
                 queenStack = _state.QueenStack,
+                pendingQueenMode = _state.PendingQueenModeSeat.HasValue,
                 pendingGive = _state.PendingGiveSeat.HasValue,
                 deckCount = _state.Deck.Count,
                 recentDiscard = recentIds,

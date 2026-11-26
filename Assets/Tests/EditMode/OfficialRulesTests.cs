@@ -596,8 +596,15 @@ namespace Game.Rules.Tests
             for (var seat = 0; seat < queens.Length; seat++)
             {
                 AssertAccepted(RuleEngine.PlayCard(state, seat, IdInHand(state, seat, queens[seat])));
-                AssertRejected(RuleEngine.AcceptQueen(state, seat), RejectCode.NotQueenResponse);
-                AssertAccepted(RuleEngine.ChooseQueenMode(state, seat, QueenMode.Give));
+                if (seat == 0)
+                {
+                    AssertAccepted(RuleEngine.ChooseQueenMode(state, seat, QueenMode.Give));
+                }
+                else
+                {
+                    Assert.That(state.PendingQueenModeSeat, Is.Null);
+                    AssertRejected(RuleEngine.ChooseQueenMode(state, seat, QueenMode.Reverse), RejectCode.NeedQueenMode);
+                }
                 Assert.That(state.QueenStack, Is.EqualTo(seat + 1));
             }
 
@@ -614,9 +621,8 @@ namespace Game.Rules.Tests
             state.EnsureInvariant();
         }
 
-        [TestCase(QueenMode.Give)]
-        [TestCase(QueenMode.Reverse)]
-        public void QueenGive_ResponseQueen_CanBeDefendedOrReverseTheTurn(QueenMode mode)
+        [Test]
+        public void QueenGive_ResponseQueen_AutomaticallyStacksAndCanBeDefended()
         {
             var state = Table(3);
             LeaveOnly(state, 0, "SQ", "S6");
@@ -626,12 +632,10 @@ namespace Game.Rules.Tests
             AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "SQ")));
             AssertAccepted(RuleEngine.ChooseQueenMode(state, 0, QueenMode.Give));
             AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, "HQ")));
-            AssertAccepted(RuleEngine.ChooseQueenMode(state, 1, mode));
-            if (mode == QueenMode.Give)
-            {
-                AssertRejected(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "S3")), RejectCode.NotQueenResponse);
-                AssertAccepted(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "H4")));
-            }
+            Assert.That(state.CurrentSeat, Is.EqualTo(2));
+            Assert.That(state.QueenStack, Is.EqualTo(2));
+            AssertRejected(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "S3")), RejectCode.NotQueenResponse);
+            AssertAccepted(RuleEngine.PlayCard(state, 2, IdInHand(state, 2, "H4")));
             Assert.That(state.CurrentSeat, Is.EqualTo(0));
             Assert.That(state.QueenStack, Is.Zero);
             Assert.That(state.QueenGiveTargetSeat, Is.Null);

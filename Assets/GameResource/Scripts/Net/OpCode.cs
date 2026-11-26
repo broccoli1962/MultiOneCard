@@ -29,7 +29,7 @@ namespace Backend.Net
     public static class ProtocolVersion
     {
         public const int Major = 2;
-        public const int Minor = 1;
+        public const int Minor = 2;
         public const string Region = "ap-northeast";
     }
 

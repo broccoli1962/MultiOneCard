@@ -52,11 +52,12 @@ namespace Game.Rules.Tests
             LeaveOnly(state, 1, "HQ", "H6", "H7", "H8");
             SetDiscardTop(state, "S5");
             state.CurrentSeat = 0;
-            runtime.Submit(CommandMessage.PlayCard(0, 0, IdInHand(state, 0, "SQ")), 1);
+            var opening = runtime.Submit(CommandMessage.PlayCard(0, 0, IdInHand(state, 0, "SQ")), 1);
+            Assert.That(FindEv(opening, EvCode.TurnChanged).match.pendingQueenMode, Is.True);
             var first = runtime.Submit(CommandMessage.ChooseQueenMode(0, 0, QueenModeName.Give), 2);
             Assert.That(LegalHint.CanPlay(FindEv(first, EvCode.TurnChanged).match, "HQ"), Is.True);
-            runtime.Submit(CommandMessage.PlayCard(0, 1, IdInHand(state, 1, "HQ")), 3);
-            var second = runtime.Submit(CommandMessage.ChooseQueenMode(0, 1, QueenModeName.Give), 4);
+            var second = runtime.Submit(CommandMessage.PlayCard(0, 1, IdInHand(state, 1, "HQ")), 3);
+            Assert.That(FindEv(second, EvCode.TurnChanged).match.pendingQueenMode, Is.False);
             Assert.That(FindEv(second, EvCode.TurnChanged).match.queenStack, Is.EqualTo(2));
             runtime.Submit(CommandMessage.AcceptQueen(0, 0), 5);
             var ids = new[] { IdInHand(state, 1, "H6"), IdInHand(state, 1, "H7") };
