@@ -207,12 +207,13 @@ namespace Game.Rules.Tests
         {
             var state = Table(3);
             LeaveOnly(state, 0, "MA", "M6");
-            LeaveOnly(state, 1, CardCatalog.IdPass, "H8");
+            LeaveOnly(state, 1, CardCatalog.IdPass, "S8");
             LeaveOnly(state, 2, "H2", "SA", CardCatalog.IdJokerBw, "H8");
             SetDiscardTop(state, "M5");
             AssertAccepted(RuleEngine.PlayCard(state, 0, IdInHand(state, 0, "MA")));
             AssertAccepted(RuleEngine.PlayCard(state, 1, IdInHand(state, 1, CardCatalog.IdPass)));
             Assert.That(state.DiscardTop.Def.Spec, Is.EqualTo(SpecKind.Pass));
+            Assert.That(state.AttackStack, Is.EqualTo(CardCatalog.AttackAce));
             Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("H2")), Is.True);
             Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("C2")), Is.True);
             Assert.That(LegalMove.CanPlay(state, state.Catalog.GetDef("SA")), Is.True);
